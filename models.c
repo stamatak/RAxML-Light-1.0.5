@@ -3432,16 +3432,15 @@ void initReversibleGTR(tree *tr, analdef *adef, int model)
 	 if(tr->partitionData[model].protModels == AUTO)
 	   initProtMat(f, tr->partitionData[model].autoProtModels, ext_initialRates, adef->userProteinModel, 
 		       adef->externalAAMatrix);
-	 else
+	 else	  
 	   initProtMat(f, tr->partitionData[model].protModels, ext_initialRates, adef->userProteinModel, 
-		       adef->externalAAMatrix); 
-	   
+		       adef->externalAAMatrix); 		   
 	 
 	 if(adef->protEmpiricalFreqs && tr->NumberOfModels == 1)
 	   assert(tr->partitionData[model].protFreqs);
 	 
 	 if(!tr->partitionData[model].protFreqs)	       	  
-	   {	     
+	   {	     	    
 	     for(l = 0; l < 20; l++)		
 	       frequencies[l] = f[l];
 	   } 

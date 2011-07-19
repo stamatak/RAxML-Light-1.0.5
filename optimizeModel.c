@@ -2291,6 +2291,289 @@ void modOpt(tree *tr, analdef *adef, boolean resetModel, double likelihoodEpsilo
   freeLinkageList(invarList);  
 }
 
+#ifdef _JOERG
 
+/* initialize a random seed for random number generator */
+
+long randomSeed = 12345;
+
+/* function to simply assign protein substitution models randomly 
+   to different partitions */
+
+static void  assignProteinModels(tree *tr, analdef *adef)
+{
+  int 
+    model;
+  
+  /*
+    the numbetr of classic fixed-rates protein substitution models in RAxML 
+     is NUM_PROT_MODELS - 2. I won't go into the details now why this is so.
+     the constant NUM_PROT_MODELS is defined in axml.h 
+  */
+
+  double
+    numberOfAvailableProteinModels = (double)(NUM_PROT_MODELS - 2);
+
+  /* now we just loop over the number of partitions/genes in our input dataset */
+
+  for(model = 0; model < tr->NumberOfModels; model++)
+    {
+      /* and initialize the protein susbtitution model for this partition randomly */
+      tr->partitionData[model].protModels = (int)(randum(&randomSeed) * numberOfAvailableProteinModels);
+
+      /* here we then compute a eigenvector eigenvalue decomposition for the selected substitrution model */
+      /* this needs to be done every time we change the protein substitution model for a partition */
+      initReversibleGTR(tr, adef, model);
+    }
+}
+
+static void  testProteinModels(tree *tr, analdef *adef, int proteinModel)
+{
+  int 
+    model;
+    
+  assert(proteinModel < AUTO);
+
+  /* 
+     just a stupid loop for testing all available protein models in RAxML 
+     when branch lengths are unlinked, i.e., estimated separately for each
+     partition. In this case we don't have the hard optimization problem 
+     as in the case when branch lengths are linke dacross partitions
+     This can serve as a means for obtaining an initial assignment of 
+     prot. subst. models to partitions., something like and initial seed.
+  */
+     
+
+  for(model = 0; model < tr->NumberOfModels; model++)
+    {
+      tr->partitionData[model].protModels = proteinModel;     
+      initReversibleGTR(tr, adef, model);
+    }
+}
+
+void modOptJoerg(tree *tr, analdef *adef)
+{ 
+  int     
+    modelsTested = 0,
+    i, 
+    model, 
+    catOpt = 0,
+    *unlinked   = (int *)malloc(sizeof(int) * tr->NumberOfModels),
+    *bestModels = (int *)malloc(sizeof(int) * tr->NumberOfModels);
+  
+  double 
+    *bestLikelihoods = (double*)malloc(sizeof(double) * tr->NumberOfModels),
+    bestLikelihood = unlikely,
+
+    /* important parameter: this is the number of log likelihoo units at which we will 
+       stop trying to further optimize the model parameters */
+    
+    likelihoodEpsilon = 5.0,
+    currentLikelihood,
+    modelEpsilon = 0.0001;
+  
+  linkageList 
+    *alphaList;
+    
+  for(i = 0; i < tr->NumberOfModels; i++)
+    {
+      /* this unlinked thingy here just tells RAxML that the other relevant model 
+	 parameter, the alpha shape parameter will be estimated separately for each 
+	 partition */
+      unlinked[i] = i;
+      bestModels[i] = -1;
+      bestLikelihoods[i] = unlikely;
+    }
+  
+  /* initialize the linkage list for the alpha parameter of rate heterogeneity */
+
+  alphaList = initLinkageList(unlinked, tr);
+    
+  /* just an arbitrarily selected node of the tree where we will start 
+     the recursion of the Felsenstein pruning algorithm */
+
+  tr->start = tr->nodep[1];
+  
+  /* start testing different protein model assignments */
+  
+  while(1)
+    {    
+      /* we loop over different assignments of models to partitions */
+      /* initially let's just set the branch lengths to their default values */
+
+      resetBranches(tr);
+
+      for(model = 0; model < tr->NumberOfModels; model++)
+	{
+	  /* set the alpha shape parameter to its default value */
+	  tr->partitionData[model].alpha = 1.0;      
+
+	  /* initialize the discretization of the GAMMA function --- we use 4 discrete rates
+	     to approximate the integral over GAMMA we actually want to compute */
+	  
+	  makeGammaCats(tr->partitionData[model].alpha, tr->partitionData[model].gammaRates, 4); 
+
+	  /* use empirical protein frequencies in contrast to the pre-defined ones that come with the 
+	     models. The empirical freqs typically yield better likelihood scores, so let's not worry about this 
+	  */
+	  tr->partitionData[model].protFreqs = 1; 
+	}
+      
+      /* if we are doing independent per-partition branch length estimates 
+	 we just loop once over all available models to determine the 
+	 best model for each partition of the data
+      */
+      if(tr->multiBranch)
+	{
+	  testProteinModels(tr, adef, modelsTested);
+	  printBothOpen("\nAssesing model %s\n", protModels[modelsTested]);
+	  modelsTested++;
+	}
+      else
+	/* otherwise we just assign models randomly to partitions */	   
+	assignProteinModels(tr, adef);
+
+      /* some parallel stuff, we need to make sure to broadcast 
+	 the new model to partition assignment from the master 
+	 to all worker processes, nothing to worry about 
+      */
+
+      
+
+#ifdef _FINE_GRAIN_MPI
+      masterBarrierMPI(THREAD_COPY_INIT_MODEL, tr);  
+#endif
+
+#ifdef _USE_PTHREADS
+      masterBarrier(THREAD_COPY_INIT_MODEL, tr);   
+#endif
+      
+      /* now we just compute the likelihood of the tree for the new model 
+	 assignment using the default branch length and alpha parameter values 
+      */
+
+      evaluateGenericInitrav(tr, tr->start);
+
+      /* loop and apply numerical optimization routines 
+	 for branch lengths and alpha until the difference 
+	 in log likelihood improvement gets smaller than 
+	 likelihoodEpsilon log likelihood units.
+	 Note that, the actual pergormance run time depends heavily 
+	 on likelihoodEpsilon since this influences the number of inner do while lopp iterations 
+      */
+
+      do
+	{	
+      
+	  /* remember the current likelihood */
+
+	  currentLikelihood = tr->likelihood;               
+           
+	  /* entirely re-traverse the tree using Felsensteins pruning algorithm */
+
+	  onlyInitrav(tr, tr->start);                                       	  
+
+	  /* optimize the branch lengths a bit */
+
+	  treeEvaluate(tr, 0.0625);      
+      
+	  switch(tr->rateHetModel)
+	    {
+	    case GAMMA:      
+	      /* optimize the alpha shape parameter for each partition individually and independently 
+		 using brent's numerical optimization algorithm. For details on the general algorithm 
+		 see the book: Numerical recipees in C */
+
+	      optAlpha(tr, modelEpsilon, alphaList); 
+	      
+	      /* re-traverse the entire tree using Felsenstein's algorithm */
+
+	      onlyInitrav(tr, tr->start); 	 	 
+	      
+	      /* optimize branch lengths a bit more */
+
+	      treeEvaluate(tr, 0.1);	  	 
+	      break;	  
+	    default:
+	      assert(0);
+	    }           
+	}
+
+      /* check convergence criterion */
+
+      while(fabs(currentLikelihood - tr->likelihood) > likelihoodEpsilon);  
+      
+      /* printf("%f %f %f\n", tr->likelihood, tr->perPartitionLH[0], tr->perPartitionLH[1]); */
+      
+      if(!tr->multiBranch)
+	{
+	  /* once the loop for the current model to partition assignment has converged 
+	     print out some stuff. Here the loop will be endless, i.e., we will 
+	     assess random model assignments until somebody kills the 
+	     job :-) */
+
+	  if(tr->likelihood > bestLikelihood)
+	    {
+	      bestLikelihood = tr->likelihood; 
+	      
+	      printf("Assignment: \n");
+	      
+	      for(model = 0; model < tr->NumberOfModels; model++)	    
+		printf("%s\t", protModels[tr->partitionData[model].protModels]);
+	      	      
+	      printf("\nLikelihood: %f\n", tr->likelihood);
+	    }
+	}
+      else
+	{
+	  /* print out some stuff in the case branch lengths are estimated independently 
+	     for each partition */
+
+	  for(model = 0; model < tr->NumberOfModels; model++)
+	    {
+	      if(tr->perPartitionLH[model] > bestLikelihoods[model])
+		{
+		  bestLikelihoods[model] = tr->perPartitionLH[model];
+		  bestModels[model] = modelsTested - 1;
+		  /*printf("Partition %d %s\n", model, protModels[bestModels[model]]);*/
+		}	   
+	    }
+	}
+      
+      /* if we have tested all available models for partition-idnependent branch length estimates,
+	 just jump out of the endless while-loop */
+
+      if(modelsTested == AUTO)
+	break;
+    }
+  
+  /* 
+     print some stuff 
+     actually protModels as defined in globalVariables.h just maps the integers 
+     that represent protein substitution models back to their real names.
+   */
+
+  if(tr->multiBranch)
+    {
+      printf("\n\nAssignment: \n");
+	      
+      for(model = 0; model < tr->NumberOfModels; model++)	    	
+	printf("%s\t", protModels[bestModels[model]]);
+	      	      
+      printf("\n");
+    }
+
+  /* good-bye */
+
+  free(unlinked);
+  freeLinkageList(alphaList); 
+
+  /* just exit and we are done :-) */
+
+  exit(0);
+}
+
+
+#endif
 
 

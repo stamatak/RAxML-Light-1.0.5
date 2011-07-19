@@ -5076,7 +5076,11 @@ static void threadFixModelIndices(tree *tr, tree *localTree, int tid, int n)
 
       localTree->partitionData[model].gapVectorLength = ((int)width / 32) + 1;
       
+      printf("s1\n");
+
       memset(localTree->partitionData[model].gapVector, 0, localTree->partitionData[model].initialGapVectorSize);
+
+      printf("s2\n");
 
       if(localTree->saveMemory)
 	{
@@ -5188,19 +5192,16 @@ void allocNodex(tree *tr, int tid, int n)
 
       memoryRequirements += (size_t)(tr->discreteRateCategories) * (size_t)(tr->partitionData[model].states) * width;
 
-      if(tr->saveMemory)
-	{		
-	  tr->partitionData[model].gapVectorLength = ((int)width / 32) + 1;
-	  
-	  tr->partitionData[model].gapVector = (unsigned int*)calloc(tr->partitionData[model].gapVectorLength * 2 * tr->mxtips, sizeof(unsigned int));	  
-
-	  tr->partitionData[model].initialGapVectorSize = tr->partitionData[model].gapVectorLength * 2 * tr->mxtips * sizeof(int);
-	  
-	  tr->partitionData[model].gapColumn = (double *)malloc_aligned(((size_t)tr->innerNodes) *								      
-									((size_t)(tr->partitionData[model].states)) *
-									rateHet * sizeof(double));		        
-	}
+     		
+      tr->partitionData[model].gapVectorLength = ((int)width / 32) + 1;
       
+      tr->partitionData[model].gapVector = (unsigned int*)calloc(tr->partitionData[model].gapVectorLength * 2 * tr->mxtips, sizeof(unsigned int));	  
+      
+      tr->partitionData[model].initialGapVectorSize = tr->partitionData[model].gapVectorLength * 2 * tr->mxtips * sizeof(int);
+      
+      tr->partitionData[model].gapColumn = (double *)malloc_aligned(((size_t)tr->innerNodes) *								      
+								    ((size_t)(tr->partitionData[model].states)) *
+								    rateHet * sizeof(double));		              
     }
 
   if(tid == 0)
@@ -5920,6 +5921,13 @@ int main (int argc, char *argv[])
       
       if(adef->useCheckpoint)
 	{
+#ifdef _JOERG
+	  /* this is for a checkpoint-based restart, we don't need this here 
+	     so we will just exit gracefully */
+
+	  assert(0);
+#endif
+
 	  restart(tr, adef);
 
 	  computeBIGRAPID(tr, adef, TRUE); 
@@ -5929,12 +5937,23 @@ int main (int argc, char *argv[])
 	  accumulatedTime = 0.0;
 	 
 	  getStartingTree(tr, adef);     
-		  
+#ifdef _JOERG		  
+	  /* 
+	     at this point the code has parsed the input alignment 
+	     and read the tree on which we want to estimate the best 
+	     model. We now just branch into the function on which you can work.
+	     This function will never return, hence, you don't need to worry 
+	     about the rest of the code below modOptJoerg().
+	  */
+	  
+	  modOptJoerg(tr, adef);
+#else
 	  evaluateGenericInitrav(tr, tr->start);	 
 	 	  	  
 	  treeEvaluate(tr, 1); 	 	 	 	 	 
          
 	  computeBIGRAPID(tr, adef, TRUE); 	     
+#endif
 	}            
       
       finalizeInfoFile(tr, adef);

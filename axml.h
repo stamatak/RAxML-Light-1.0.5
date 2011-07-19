@@ -1284,7 +1284,9 @@ extern void *malloc_aligned( size_t size);
 extern void myBinFwrite(const void *ptr, size_t size, size_t nmemb);
 extern void myBinFread(void *ptr, size_t size, size_t nmemb);
 
-
+#ifdef _JOERG
+extern void modOptJoerg(tree *tr, analdef *adef);
+#endif
 
 extern void makenewzIterative(tree *);
 extern void execCore(tree *, volatile double *dlnLdlz, volatile double *d2lnLdlz2);
