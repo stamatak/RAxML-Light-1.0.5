@@ -1516,6 +1516,7 @@ void allocNodex(tree *tr, int tid, int n);
 #define THREAD_NEWVIEW_MASKED  10
 #define THREAD_OPT_ALPHA       11
 #define EXIT_GRACEFULLY        12
+#define THREAD_COPY_ALPHA      13
 
 
 typedef struct 
