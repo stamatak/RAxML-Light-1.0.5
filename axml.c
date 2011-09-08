@@ -5321,7 +5321,8 @@ static void execFunction(tree *tr, tree *localTree, int tid, int n)
   currentJob = threadJob >> 16;
 
   switch(currentJob)
-    {     
+    {      
+
     case THREAD_INIT_PARTITION:
       initPartition(tr, localTree, tid);     
       allocNodex(localTree, tid, n);
@@ -5438,6 +5439,16 @@ static void execFunction(tree *tr, tree *localTree, int tid, int n)
 	      memcpy(localTree->partitionData[model].EV,          tr->partitionData[model].EV,          pl->evLength * sizeof(double));		  
 	      memcpy(localTree->partitionData[model].EI,          tr->partitionData[model].EI,          pl->eiLength * sizeof(double));
 	      memcpy(localTree->partitionData[model].tipVector,   tr->partitionData[model].tipVector,   pl->tipVectorLength * sizeof(double));	      	     	
+	    }
+	}
+      break;
+    case THREAD_COPY_ALPHA:
+      if(tid > 0)
+	{
+	  for(model = 0; model < localTree->NumberOfModels; model++)
+	    {
+	      memcpy(localTree->partitionData[model].gammaRates, tr->partitionData[model].gammaRates, sizeof(double) * 4);
+	      localTree->partitionData[model].alpha = tr->partitionData[model].alpha;
 	    }
 	}
       break;

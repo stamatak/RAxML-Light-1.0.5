@@ -988,7 +988,7 @@ static void optAlpha(tree *tr, double modelEpsilon, linkageList *ll)
     *result     = (double *)malloc(sizeof(double) * numberOfModels),
     *_x         = (double *)malloc(sizeof(double) * numberOfModels);   
 
-#ifdef _USE_PTHREADS
+#if (defined(_USE_PTHREADS) || defined(_FINE_GRAIN_MPI))
    int revertModel = 0;
 #endif   
 
@@ -1032,7 +1032,7 @@ static void optAlpha(tree *tr, double modelEpsilon, linkageList *ll)
 	      tr->partitionData[ll->ld[i].partitionList[k]].alpha = startAlpha[i];
 	      makeGammaCats(tr->partitionData[ll->ld[i].partitionList[k]].alpha, tr->partitionData[ll->ld[i].partitionList[k]].gammaRates, 4); 		
 	    }
-#ifdef _USE_PTHREADS
+#if (defined(_USE_PTHREADS) || defined(_FINE_GRAIN_MPI))
 	  revertModel++;
 #endif
 	}  
@@ -1041,6 +1041,11 @@ static void optAlpha(tree *tr, double modelEpsilon, linkageList *ll)
 #ifdef _USE_PTHREADS
   if(revertModel > 0)
     masterBarrier(THREAD_COPY_ALPHA, tr);
+#endif
+
+#ifdef _FINE_GRAIN_MPI
+  if(revertModel > 0)
+    masterBarrierMPI(THREAD_COPY_ALPHA, tr);
 #endif
 
   
@@ -1852,7 +1857,7 @@ void updatePerSiteRates(tree *tr)
 #endif
 
 #ifdef _USE_PTHREADS
-      masterBarrier(THREAD_COPY_RATE_CATS, tr);
+  masterBarrier(THREAD_COPY_RATE_CATS, tr);
 #endif             
     
 

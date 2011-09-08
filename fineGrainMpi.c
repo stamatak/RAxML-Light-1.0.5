@@ -794,6 +794,29 @@ void fineGrainWorker(tree *tr)
 	    free(buffer);
 	  }
 	  break;
+	case THREAD_COPY_ALPHA:
+	  {
+	    double 	     
+	      *buffer;
+
+	    int
+	      bufIndex = 0,
+	      length = job.length,
+	      model;
+
+	    buffer = (double*)malloc(sizeof(double) * length);
+
+	    MPI_Bcast(buffer, length, MPI_DOUBLE, 0, MPI_COMM_WORLD);  
+	
+	    for(model = 0; model < tr->NumberOfModels; model++)	  	    
+	      {
+		tr->partitionData[model].alpha = buffer[bufIndex++];
+		makeGammaCats(tr->partitionData[model].alpha, tr->partitionData[model].gammaRates, 4);					       
+	      }	      				    	  
+	
+	    free(buffer);
+	  }
+	  break;
 	case EXIT_GRACEFULLY:
 	  goto endIT;
 	default:
@@ -1373,6 +1396,29 @@ void masterBarrierMPI(int jobType, tree *tr)
 	  tr->perPartitionLH[model] = globalResult[model];
 	
 	free(buffer);
+      }      
+      break;      
+    case THREAD_COPY_ALPHA:
+      {
+	 double 	
+	  *buffer;
+
+	int
+	  bufIndex = 0,
+	  length = tr->NumberOfModels,
+	  model;       		 	 
+
+	buffer = (double*)malloc(sizeof(double) * length);
+	
+	for(model = 0; model < tr->NumberOfModels; model++)	 
+	  buffer[bufIndex++] = tr->partitionData[model].alpha;	 
+	  
+	job.length = length;	
+	sendMergedMessage(&job, tr);
+		
+	MPI_Bcast(buffer, length, MPI_DOUBLE, 0, MPI_COMM_WORLD);	
+	
+	free(buffer);  
       }
       break;
     case EXIT_GRACEFULLY:     
