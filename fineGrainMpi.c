@@ -253,18 +253,28 @@ static void memSaveInit(tree *tr)
     }
 }
 
+static int sendBufferSizeInt(int numberOfModels)
+{
+  int
+    size = 12;
+
+  size += (size_t)numberOfModels * 8;
+
+  return size;
+}
+
 void fineGrainWorker(tree *tr)
 {
   int 
+    sendBufferLength = 0,
     totalLength = 0,
     model,
     threadID,
     dataCounter,
     NumberOfThreads = processes,
-    sendBufferInt[4096];
+    *sendBufferInt;
 
-  double    
-    sendBufferDouble[4096],
+  double        
     *dlnLdlz,
     *d2lnLdlz2,
     *partialResult,
@@ -274,6 +284,9 @@ void fineGrainWorker(tree *tr)
     job;
 
   MPI_Bcast(&(tr->NumberOfModels), 1, MPI_INT, 0, MPI_COMM_WORLD);
+
+  sendBufferLength = sendBufferSizeInt(tr->NumberOfModels);
+  sendBufferInt = (int*)malloc(sizeof(int) * sendBufferLength);
 
   threadID = processID;
 
@@ -826,22 +839,25 @@ void fineGrainWorker(tree *tr)
  endIT:;
 }
 
+
+
 void startFineGrainMpi(tree *tr, analdef *adef)
 {
-  double
-    sendBufferDouble[4096];
-
+  
+  
   int
-    sendBufferInt[4096],
+    sendBufferLength = 0,
+    *sendBufferInt,
     threadID,
     totalLength = 0,
     dataCounter = 0,
     model = 0,
-    NumberOfThreads = processes;  
-  
- 
+    NumberOfThreads = processes;     
   
   MPI_Bcast(&(tr->NumberOfModels), 1, MPI_INT, 0, MPI_COMM_WORLD);   
+
+  sendBufferLength = sendBufferSizeInt(tr->NumberOfModels);
+  sendBufferInt = (int*)malloc(sizeof(int) * sendBufferLength);
 
   threadID = processID;  
 
@@ -872,7 +888,7 @@ void startFineGrainMpi(tree *tr, analdef *adef)
       sendBufferInt[dataCounter++] = tr->partitionData[model].upper;      
       totalLength += (tr->partitionData[model].upper -  tr->partitionData[model].lower);
 
-      assert(dataCounter < 4096);
+      assert(dataCounter <= sendBufferLength);
     }
   
   assert(totalLength == tr->originalCrunchedLength);
