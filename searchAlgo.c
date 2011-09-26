@@ -1096,6 +1096,8 @@ static void writeCheckpoint(tree *tr)
       int 
 	dataType = tr->partitionData[model].dataType;
             
+      myfwrite(&(tr->partitionData[model].numberOfCategories), sizeof(int), 1, f);
+      myfwrite(tr->partitionData[model].perSiteRates, sizeof(double), tr->maxCategories, f);
       myfwrite(tr->partitionData[model].EIGN, sizeof(double), pLengths[dataType].eignLength, f);
       myfwrite(tr->partitionData[model].EV, sizeof(double),  pLengths[dataType].evLength, f);
       myfwrite(tr->partitionData[model].EI, sizeof(double),  pLengths[dataType].eiLength, f);  
@@ -1208,7 +1210,6 @@ static void readCheckpoint(tree *tr, analdef *adef)
   tr->lhCutoff   = ckp.tr_lhCutoff;
   tr->lhAVG      = ckp.tr_lhAVG;
   tr->lhDEC      = ckp.tr_lhDEC;
-  tr->NumberOfCategories = ckp.tr_NumberOfCategories;
   tr->itCount    = ckp.tr_itCount;
   Thorough       = ckp.Thorough;
   
@@ -1275,6 +1276,8 @@ static void readCheckpoint(tree *tr, analdef *adef)
       int 
 	dataType = tr->partitionData[model].dataType;
             
+      myfread(&(tr->partitionData[model].numberOfCategories), sizeof(int), 1, f);
+      myfread(tr->partitionData[model].perSiteRates, sizeof(double), tr->maxCategories, f);
       myfread(tr->partitionData[model].EIGN, sizeof(double), pLengths[dataType].eignLength, f);
       myfread(tr->partitionData[model].EV, sizeof(double),  pLengths[dataType].evLength, f);
       myfread(tr->partitionData[model].EI, sizeof(double),  pLengths[dataType].eiLength, f);  
@@ -1294,7 +1297,7 @@ static void readCheckpoint(tree *tr, analdef *adef)
   masterBarrier(THREAD_COPY_INIT_MODEL, tr);
 #endif
 
-  updatePerSiteRates(tr);  
+  updatePerSiteRates(tr, FALSE);  
 
   readTree(tr, f, adef);
 
@@ -1380,8 +1383,7 @@ int determineRearrangementSetting(tree *tr,  analdef *adef, bestlist *bestT, bes
   
       ckp.tr_lhCutoff = tr->lhCutoff;
       ckp.tr_lhAVG    = tr->lhAVG;
-      ckp.tr_lhDEC    = tr->lhDEC;
-      ckp.tr_NumberOfCategories = tr->NumberOfCategories;
+      ckp.tr_lhDEC    = tr->lhDEC;      
       ckp.tr_itCount  = tr->itCount;
      
       
@@ -1570,8 +1572,7 @@ void computeBIGRAPID (tree *tr, analdef *adef, boolean estimateModel)
               
 	  tr->lhCutoff = ckp.tr_lhCutoff;
 	  tr->lhAVG    = ckp.tr_lhAVG;
-	  tr->lhDEC    = ckp.tr_lhDEC;   
-	  tr->NumberOfCategories = ckp.tr_NumberOfCategories;
+	  tr->lhDEC    = ckp.tr_lhDEC;   	 
 	  tr->itCount = ckp.tr_itCount;
 	  tr->doCutoff = ckp.tr_doCutoff;
 
@@ -1611,8 +1612,7 @@ void computeBIGRAPID (tree *tr, analdef *adef, boolean estimateModel)
        
        ckp.tr_lhCutoff = tr->lhCutoff;
        ckp.tr_lhAVG    = tr->lhAVG;
-       ckp.tr_lhDEC    = tr->lhDEC;
-       ckp.tr_NumberOfCategories = tr->NumberOfCategories;
+       ckp.tr_lhDEC    = tr->lhDEC;       
        ckp.tr_itCount  = tr->itCount;
        ckp.tr_doCutoff = tr->doCutoff;
               
@@ -1766,8 +1766,7 @@ void computeBIGRAPID (tree *tr, analdef *adef, boolean estimateModel)
               
 	  tr->lhCutoff = ckp.tr_lhCutoff;
 	  tr->lhAVG    = ckp.tr_lhAVG;
-	  tr->lhDEC    = ckp.tr_lhDEC;   
-	  tr->NumberOfCategories = ckp.tr_NumberOfCategories;
+	  tr->lhDEC    = ckp.tr_lhDEC;   	 
 	  tr->itCount = ckp.tr_itCount;
 	  tr->doCutoff = ckp.tr_doCutoff;
 
@@ -1807,8 +1806,7 @@ void computeBIGRAPID (tree *tr, analdef *adef, boolean estimateModel)
        
        ckp.tr_lhCutoff = tr->lhCutoff;
        ckp.tr_lhAVG    = tr->lhAVG;
-       ckp.tr_lhDEC    = tr->lhDEC;
-       ckp.tr_NumberOfCategories = tr->NumberOfCategories;
+       ckp.tr_lhDEC    = tr->lhDEC;     
        ckp.tr_itCount  = tr->itCount;
        ckp.tr_doCutoff = tr->doCutoff;
                   

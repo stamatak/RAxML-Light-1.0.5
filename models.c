@@ -3995,7 +3995,8 @@ void initModel(tree *tr, rawdata *rdta, cruncheddata *cdta, analdef *adef)
   optimizeRateCategoryInvocations = 1;      
   tr->numberOfInvariableColumns = 0;
   tr->weightOfInvariableColumns = 0;	 
-  tr->NumberOfCategories = 1;   
+    
+  
   
   for (j = 0; j < tr->cdta->endsite; j++) 
     {
@@ -4004,8 +4005,13 @@ void initModel(tree *tr, rawdata *rdta, cruncheddata *cdta, analdef *adef)
       tr->cdta->rateCategory[j] = 0;           
     } 
 
- 
-  updatePerSiteRates(tr);
+  for(model = 0; model < tr->NumberOfModels; model++)
+    {            
+      tr->partitionData[model].numberOfCategories = 1;           
+      tr->partitionData[model].perSiteRates[0] = 1.0; 
+    }
+  
+  updatePerSiteRates(tr, FALSE);
  
    
   setupSecondaryStructureSymmetries(tr);

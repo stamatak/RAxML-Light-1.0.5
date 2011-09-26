@@ -4604,11 +4604,7 @@ void newviewIterative (tree *tr)
 		*x2_gapColumn = (double*)NULL,
 		*x3_gapColumn = (double*)NULL;
 
-	      int
-		rateHet   = 0,
-		gapOffset = 0,
-		states =  tr->partitionData[model].states,
-		width =  tr->partitionData[model].width,		
+	      int	       
 		scalerIncrement = 0,
 		*wgt = tr->partitionData[model].wgt,       
 		*ex3 = (int*)NULL;
@@ -4626,40 +4622,54 @@ void newviewIterative (tree *tr)
 		qz, 
 		rz;	     
 	      
-	      int 
-		availableLength = 0,
+	      size_t
+		gapOffset,
+		rateHet,
+		states = (size_t)tr->partitionData[model].states,
+		width  = (size_t)tr->partitionData[model].width,
+		availableLength = tr->partitionData[model].xSpaceVector[(tInfo->pNumber - tr->mxtips - 1)],
 		requiredLength = 0;
 
 	      if(tr->rateHetModel == CAT)
 		rateHet = 1;
 	      else
-		rateHet = 4; 
-
+		rateHet = 4;
+	     
+	      
 	      if(tr->saveMemory)
 		{
-		  int 
+		  size_t
 		    j,
-		    setBits = 0;
+		    setBits = 0;		  
 
-		  gapOffset = states * getUndetermined(tr->partitionData[model].dataType);
-
-		  assert(gapOffset == 60 || gapOffset == 440);
+		  gapOffset = states * (size_t)getUndetermined(tr->partitionData[model].dataType);
 
 		  x1_gap = &(tr->partitionData[model].gapVector[tInfo->qNumber * tr->partitionData[model].gapVectorLength]);
 		  x2_gap = &(tr->partitionData[model].gapVector[tInfo->rNumber * tr->partitionData[model].gapVectorLength]);
-		  x3_gap = &(tr->partitionData[model].gapVector[tInfo->pNumber * tr->partitionData[model].gapVectorLength]);
-		      
-		  availableLength = tr->partitionData[model].xSpaceVector[(tInfo->pNumber - tr->mxtips - 1)];
+		  x3_gap = &(tr->partitionData[model].gapVector[tInfo->pNumber * tr->partitionData[model].gapVectorLength]);		      		  
 
-		  for(j = 0; j < tr->partitionData[model].gapVectorLength; j++)
+		  for(j = 0; j < (size_t)tr->partitionData[model].gapVectorLength; j++)
 		    {		     
 		      x3_gap[j] = x1_gap[j] & x2_gap[j];
-		      setBits += (int)(precomputed16_bitcount(x3_gap[j]));		      
+		      setBits += (size_t)(precomputed16_bitcount(x3_gap[j]));		      
 		    }
 		      		  		 
-		  requiredLength = width - setBits;		
+		  requiredLength = (width - setBits)  * rateHet * states * sizeof(double);		
 		}
-	      
+	      else
+		requiredLength  =  width * rateHet * states * sizeof(double);
+
+	      if(requiredLength != availableLength)
+		{		  
+		  if(x3_start)
+		    free(x3_start);
+		 
+		  x3_start = (double*)malloc_aligned(requiredLength);		 
+		  
+		  tr->partitionData[model].xVector[tInfo->pNumber - tr->mxtips - 1] = x3_start;		  
+		  tr->partitionData[model].xSpaceVector[(tInfo->pNumber - tr->mxtips - 1)] = requiredLength;		 
+		}
+
 	      switch(tInfo->tipCase)
 		{
 		case TIP_TIP:		  
@@ -4670,8 +4680,8 @@ void newviewIterative (tree *tr)
 		  if(tr->saveMemory)
 		    {
 		      x1_gapColumn   = &(tr->partitionData[model].tipVector[gapOffset]);
-		      x2_gapColumn   = &(tr->partitionData[model].tipVector[gapOffset]);
-		      x3_gapColumn   = &tr->partitionData[model].gapColumn[(tInfo->pNumber - tr->mxtips - 1) * states * rateHet];
+		      x2_gapColumn   = &(tr->partitionData[model].tipVector[gapOffset]);		    
+		      x3_gapColumn   = &tr->partitionData[model].gapColumn[(tInfo->pNumber - tr->mxtips - 1) * states * rateHet];		    
 		    }
 	      
 		  break;
@@ -4681,8 +4691,8 @@ void newviewIterative (tree *tr)
 		  x3_start = tr->partitionData[model].xVector[tInfo->pNumber - tr->mxtips - 1];	
 
 		  if(tr->saveMemory)
-		    {
-		      x1_gapColumn   = &(tr->partitionData[model].tipVector[gapOffset]);
+		    {	
+		      x1_gapColumn   = &(tr->partitionData[model].tipVector[gapOffset]);	     
 		      x2_gapColumn   = &tr->partitionData[model].gapColumn[(tInfo->rNumber - tr->mxtips - 1) * states * rateHet];
 		      x3_gapColumn   = &tr->partitionData[model].gapColumn[(tInfo->pNumber - tr->mxtips - 1) * states * rateHet];
 		    }
@@ -4723,20 +4733,7 @@ void newviewIterative (tree *tr)
 
 	     
 
-	       if(tr->saveMemory)
-		{		  
-		  if(requiredLength != availableLength)
-		    {
-		      if(x3_start)
-			free(x3_start);
-		     
-		      x3_start = (double*)malloc_aligned(requiredLength * states * rateHet * sizeof(double));		 
-		      
-		      tr->partitionData[model].xVector[tInfo->pNumber - tr->mxtips - 1] = x3_start;
-		      
-		      tr->partitionData[model].xSpaceVector[(tInfo->pNumber - tr->mxtips - 1)] = requiredLength;
-		    }
-		}
+	      
 
 	      switch(tr->partitionData[model].dataType)
 		{		
@@ -4745,7 +4742,7 @@ void newviewIterative (tree *tr)
 		    {
 		    
 		      makeP(qz, rz, tr->partitionData[model].perSiteRates,   tr->partitionData[model].EI,
-			    tr->partitionData[model].EIGN, tr->NumberOfCategories,
+			    tr->partitionData[model].EIGN, tr->partitionData[model].numberOfCategories,
 			    left, right, DNA_DATA, tr->saveMemory, tr->maxCategories);
 		  
 		      if(tr->saveMemory)
@@ -4755,10 +4752,17 @@ void newviewIterative (tree *tr)
 					   width, left, right, wgt, &scalerIncrement, TRUE, x1_gap, x2_gap, x3_gap,
 					   x1_gapColumn, x2_gapColumn, x3_gapColumn, tr->maxCategories);
 		      else
+#ifdef __AVX
+			newviewGTRCAT_AVX(tInfo->tipCase,  tr->partitionData[model].EV, tr->partitionData[model].rateCategory,
+					  x1_start, x2_start, x3_start, tr->partitionData[model].tipVector,
+					  ex3, tipX1, tipX2,
+					  width, left, right, wgt, &scalerIncrement, TRUE);
+#else
 			newviewGTRCAT(tInfo->tipCase,  tr->partitionData[model].EV, tr->partitionData[model].rateCategory,
 				      x1_start, x2_start, x3_start, tr->partitionData[model].tipVector,
 				      ex3, tipX1, tipX2,
 				      width, left, right, wgt, &scalerIncrement, TRUE);
+#endif
 		    }
 		  else
 		    {
@@ -4774,10 +4778,17 @@ void newviewIterative (tree *tr)
 						     x1_gap, x2_gap, x3_gap, 
 						     x1_gapColumn, x2_gapColumn, x3_gapColumn);
 		       else
+#ifdef __AVX
+			 newviewGTRGAMMA_AVX(tInfo->tipCase,
+					     x1_start, x2_start, x3_start, tr->partitionData[model].EV, tr->partitionData[model].tipVector,
+					     ex3, tipX1, tipX2,
+					     width, left, right, wgt, &scalerIncrement, TRUE);
+#else
 			 newviewGTRGAMMA(tInfo->tipCase,
 					 x1_start, x2_start, x3_start, tr->partitionData[model].EV, tr->partitionData[model].tipVector,
 					 ex3, tipX1, tipX2,
 					 width, left, right, wgt, &scalerIncrement, TRUE);
+#endif
 		    }
 		
 		  break;		    
@@ -4788,7 +4799,7 @@ void newviewIterative (tree *tr)
 		      makeP(qz, rz, tr->partitionData[model].perSiteRates,
 			    tr->partitionData[model].EI,
 			    tr->partitionData[model].EIGN,
-			    tr->NumberOfCategories, left, right, AA_DATA, tr->saveMemory, tr->maxCategories);
+			    tr->partitionData[model].numberOfCategories, left, right, AA_DATA, tr->saveMemory, tr->maxCategories);
 		      
 		      if(tr->saveMemory)
 			newviewGTRCATPROT_SAVE(tInfo->tipCase,  tr->partitionData[model].EV, tr->partitionData[model].rateCategory,
@@ -4796,9 +4807,15 @@ void newviewIterative (tree *tr)
 					       ex3, tipX1, tipX2, width, left, right, wgt, &scalerIncrement, TRUE, x1_gap, x2_gap, x3_gap,
 					       x1_gapColumn, x2_gapColumn, x3_gapColumn, tr->maxCategories);
 		      else
+#ifdef __AVX
+			newviewGTRCATPROT_AVX(tInfo->tipCase,  tr->partitionData[model].EV, tr->partitionData[model].rateCategory,
+					      x1_start, x2_start, x3_start, tr->partitionData[model].tipVector,
+					      ex3, tipX1, tipX2, width, left, right, wgt, &scalerIncrement, TRUE);
+#else
 			newviewGTRCATPROT(tInfo->tipCase,  tr->partitionData[model].EV, tr->partitionData[model].rateCategory,
 					  x1_start, x2_start, x3_start, tr->partitionData[model].tipVector,
 					  ex3, tipX1, tipX2, width, left, right, wgt, &scalerIncrement, TRUE);			
+#endif
 		    }
 		  else
 		    {
@@ -5019,7 +5036,7 @@ void newviewIterativeMulti (tree *tr)
 		{		
 		case DNA_DATA:				  
 		  makeP(qz, rz, tr->partitionData[model].perSiteRates,   tr->partitionData[model].EI,
-			tr->partitionData[model].EIGN, tr->NumberOfCategories,
+			tr->partitionData[model].EIGN, tr->partitionData[model].numberOfCategories,
 			left, right, DNA_DATA, tr->saveMemory, tr->maxCategories);
 		  
 		  assert(0);
@@ -5032,7 +5049,7 @@ void newviewIterativeMulti (tree *tr)
 		  makeP(qz, rz, tr->partitionData[model].perSiteRates,
 			tr->partitionData[model].EI,
 			tr->partitionData[model].EIGN,
-			tr->NumberOfCategories, left, right, AA_DATA, tr->saveMemory, tr->maxCategories);
+			tr->partitionData[model].numberOfCategories, left, right, AA_DATA, tr->saveMemory, tr->maxCategories);
 		  
 		  newviewGTRCATPROT(tInfo->tipCase,  tr->partitionData[model].EV, tr->partitionData[model].rateCategory,
 				    x1_start, x2_start, x3_start, tr->partitionData[model].tipVector,

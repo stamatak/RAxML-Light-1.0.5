@@ -32,6 +32,11 @@
 #include <assert.h>
 #include <stdint.h>
 
+#ifdef __AVX
+#define BYTE_ALIGNMENT 32
+#else
+#define BYTE_ALIGNMENT 16
+#endif
 
 #ifdef _USE_PTHREADS
 
@@ -563,10 +568,9 @@ typedef struct {
   int     mxtips;
   int             **expVector;
   double          **xVector;
-  int             *xSpaceVector;
+  size_t           *xSpaceVector;
  
   unsigned char            **yVector;
-  parsimonyVector **pVector;
   char   *partitionName;
   double *sumBuffer;
  
@@ -617,7 +621,7 @@ typedef struct {
   double *gapColumn;
 
   size_t initialGapVectorSize;
-
+  int    numberOfCategories;
 } pInfo;
 
 
@@ -732,9 +736,8 @@ typedef  struct  {
   double *contiguousWR2;
   
   
-  int *expArray;
-  unsigned char *y_ptr;
-  double *likelihoodArray;
+ 
+  unsigned char *y_ptr; 
  
   double *wrPtr;
   double *wr2Ptr;
@@ -871,8 +874,7 @@ typedef  struct  {
   int              numberOfSecondaryColumns;
   boolean          searchConvergenceCriterion;
   int              ntips;
-  int              nextnode;
-  int              NumberOfCategories;
+  int              nextnode;  
   int              NumberOfModels;
   int              parsimonyLength;
   
@@ -1376,7 +1378,7 @@ extern void computeRogueTaxaEPA(tree *tr);
 
 extern int *permutationSH(tree *tr, int nBootstrap, long _randomSeed);
 
-extern void updatePerSiteRates(tree *tr);
+extern void updatePerSiteRates(tree *tr, boolean scaleRates);
 
 extern void restart(tree *tr, analdef *adef);
 
@@ -1539,5 +1541,29 @@ extern void startFineGrainMpi(tree *tr, analdef *adef);
 MPI_Datatype traversalDescriptor;
 MPI_Datatype jobDescriptor;
 
+
+#endif
+
+
+#ifdef __AVX
+void newviewGTRCAT_AVX(int tipCase,  double *EV,  int *cptr,
+			   double *x1_start, double *x2_start,  double *x3_start, double *tipVector,
+			   int *ex3, unsigned char *tipX1, unsigned char *tipX2,
+		       int n,  double *left, double *right, int *wgt, int *scalerIncrement, const boolean useFastScaling);
+
+
+void newviewGenericCATPROT_AVX(int tipCase, double *extEV,
+			       int *cptr,
+			       double *x1, double *x2, double *x3, double *tipVector,
+			       int *ex3, unsigned char *tipX1, unsigned char *tipX2,
+			       int n, double *left, double *right, int *wgt, int *scalerIncrement, const boolean useFastScaling);
+
+
+void newviewGTRGAMMA_AVX(int tipCase,
+			 double *x1_start, double *x2_start, double *x3_start,
+			 double *EV, double *tipVector,
+			 int *ex3, unsigned char *tipX1, unsigned char *tipX2,
+			 const int n, double *left, double *right, int *wgt, int *scalerIncrement, const boolean useFastScaling
+			 );
 
 #endif

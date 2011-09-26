@@ -1093,7 +1093,8 @@ double evaluateIterative(tree *tr,  boolean writeVector)
 	    case DNA_DATA:
 	      if(tr->rateHetModel == CAT)
 		{
-		  calcDiagptable(z, DNA_DATA, tr->NumberOfCategories, tr->partitionData[model].perSiteRates, tr->partitionData[model].EIGN, diagptable);
+		  calcDiagptable(z, DNA_DATA, tr->partitionData[model].numberOfCategories, 
+				 tr->partitionData[model].perSiteRates, tr->partitionData[model].EIGN, diagptable);
 		  
 		  if(tr->saveMemory)
 		    partitionLikelihood =  evaluateGTRCAT_SAVE(ex1, ex2, tr->partitionData[model].rateCategory, tr->partitionData[model].wgt,
@@ -1124,7 +1125,8 @@ double evaluateIterative(tree *tr,  boolean writeVector)
 	    case AA_DATA:	
 	      if(tr->rateHetModel == CAT)
 		{
-		  calcDiagptable(z, AA_DATA, tr->NumberOfCategories, tr->partitionData[model].perSiteRates, tr->partitionData[model].EIGN, diagptable);
+		  calcDiagptable(z, AA_DATA, tr->partitionData[model].numberOfCategories, 
+				 tr->partitionData[model].perSiteRates, tr->partitionData[model].EIGN, diagptable);
 		  
 		  if(tr->saveMemory)
 		    partitionLikelihood = evaluateGTRCATPROT_SAVE(ex1, ex2, tr->partitionData[model].rateCategory, tr->partitionData[model].wgt,
@@ -1251,14 +1253,16 @@ double evaluateIterativeMulti(tree *tr,  boolean writeVector)
 	  switch(tr->partitionData[model].dataType)
 	    { 	    
 	    case DNA_DATA:	      	
-	      calcDiagptable(z, DNA_DATA, tr->NumberOfCategories, tr->partitionData[model].perSiteRates, tr->partitionData[model].EIGN, diagptable);
+	      calcDiagptable(z, DNA_DATA, tr->partitionData[model].numberOfCategories, 
+			     tr->partitionData[model].perSiteRates, tr->partitionData[model].EIGN, diagptable);
 		      
 	      partitionLikelihood =  evaluateGTRCAT(ex1, ex2, tr->partitionData[model].rateCategory, tr->partitionData[model].wgt,
 						    x1_start, x2_start, tr->partitionData[model].tipVector, 
 						    tip, width, diagptable, TRUE);		      		      		    	     
 	      break;
 	    case AA_DATA:	      	   
-	      calcDiagptable(z, AA_DATA, tr->NumberOfCategories, tr->partitionData[model].perSiteRates, tr->partitionData[model].EIGN, diagptable);
+	      calcDiagptable(z, AA_DATA, tr->partitionData[model].numberOfCategories, 
+			     tr->partitionData[model].perSiteRates, tr->partitionData[model].EIGN, diagptable);
 
 	      partitionLikelihood = evaluateGTRCATPROT(ex1, ex2, tr->partitionData[model].rateCategory, tr->partitionData[model].wgt,
 						       x1_start, x2_start, tr->partitionData[model].tipVector,

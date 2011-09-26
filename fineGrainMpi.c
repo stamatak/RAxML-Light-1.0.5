@@ -189,20 +189,7 @@ static void allocLikelihoodVectors(tree *tr)
       memoryRequirements += (size_t)(tr->discreteRateCategories) * (size_t)(tr->partitionData[model].states) * width;           
     }
 
-  if(!tr->saveMemory)
-    {     
-      tr->likelihoodArray = (double *)malloc_aligned(tr->innerNodes * memoryRequirements * sizeof(double));
-      assert(tr->likelihoodArray != NULL);
-      
-      /*
-	printf("Process %d assigning %Zu bytes %Zu MB for likelihood vectors\n", processID, tr->innerNodes * memoryRequirements * sizeof(double),  
-	(tr->innerNodes * memoryRequirements * sizeof(double))/ 1048576);
-
-      */
-
-    }
-  else
-    tr->likelihoodArray = (double *)NULL;
+  
 
    for(i = 0; i < (size_t)tr->innerNodes; i++)
     {
@@ -210,11 +197,9 @@ static void allocLikelihoodVectors(tree *tr)
 	{
 	  size_t width = (size_t)tr->partitionData[model].width;
 	  
-	  if(tr->saveMemory)
-	    tr->partitionData[model].xVector[i]   = (double*)NULL;
-	  else
-	    tr->partitionData[model].xVector[i]   = &tr->likelihoodArray[i * memoryRequirements + offset];
 	  
+	  tr->partitionData[model].xVector[i]   = (double*)NULL;
+	 	  
 	  countOffset += width;
 	  
 	  offset += (size_t)(tr->discreteRateCategories) * (size_t)(tr->partitionData[model].states) * width;	    
@@ -256,9 +241,9 @@ static void memSaveInit(tree *tr)
 static int sendBufferSizeInt(int numberOfModels)
 {
   int
-    size = 12;
+    size = 11;
 
-  size += (size_t)numberOfModels * 8;
+  size += (size_t)numberOfModels * 9;
 
   return size;
 }
@@ -302,8 +287,7 @@ void fineGrainWorker(tree *tr)
   tr->mxtips = sendBufferInt[dataCounter++];
   tr->multiBranch = sendBufferInt[dataCounter++];
   tr->multiGene = sendBufferInt[dataCounter++];
-  tr->numBranches = sendBufferInt[dataCounter++];
-  tr->NumberOfCategories = sendBufferInt[dataCounter++];
+  tr->numBranches = sendBufferInt[dataCounter++]; 
   tr->discreteRateCategories= sendBufferInt[dataCounter++]; 
   tr->rateHetModel = sendBufferInt[dataCounter++];
   
@@ -334,6 +318,7 @@ void fineGrainWorker(tree *tr)
       tr->partitionData[model].mxtips = sendBufferInt[dataCounter++];
       tr->partitionData[model].lower = sendBufferInt[dataCounter++];
       tr->partitionData[model].upper = sendBufferInt[dataCounter++];
+      tr->partitionData[model].numberOfCategories = sendBufferInt[dataCounter++];
       tr->executeModel[model] = TRUE;
       tr->perPartitionLH[model] = 0.0;
       tr->storedPerPartitionLH[model] = 0.0;
@@ -441,13 +426,15 @@ void fineGrainWorker(tree *tr)
 	     int 
 	       *b_int = (int *)malloc(sizeof(int) * tr->originalCrunchedLength);
 	     
-
-	     MPI_Bcast(&tr->NumberOfCategories,  1, MPI_INT, 0, MPI_COMM_WORLD);
+	    
 	     MPI_Bcast(tr->cdta->patrat,         tr->originalCrunchedLength, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 	     MPI_Bcast(tr->cdta->patratStored,   tr->originalCrunchedLength, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 	     
 	     for(model = 0; model < tr->NumberOfModels; model++)
-	       MPI_Bcast(tr->partitionData[model].perSiteRates, tr->NumberOfCategories, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+	       {
+		 MPI_Bcast(&(tr->partitionData[model].numberOfCategories), 1, MPI_INT, 0, MPI_COMM_WORLD);
+		 MPI_Bcast(tr->partitionData[model].perSiteRates, tr->partitionData[model].numberOfCategories, MPI_DOUBLE, 0, MPI_COMM_WORLD);		 
+	       }
 
 	     MPI_Bcast(b_int, tr->originalCrunchedLength, MPI_INT,    0, MPI_COMM_WORLD);
 	     MPI_Bcast(b1,                 tr->originalCrunchedLength, MPI_DOUBLE, 0, MPI_COMM_WORLD);
@@ -475,13 +462,14 @@ void fineGrainWorker(tree *tr)
 	     free(b_int);
 	   }
 	   break; 
-	case THREAD_COPY_INIT_MODEL:      
-	  MPI_Bcast(&tr->NumberOfCategories, 1, MPI_INT, 0, MPI_COMM_WORLD);
-	  /*MPI_Bcast(&tr->rateHetModel,       1, MPI_INT, 0, MPI_COMM_WORLD);*/
+	case THREAD_COPY_INIT_MODEL:      	
      	 
 	  for(model = 0; model < tr->NumberOfModels; model++)
 	    {
-	      const partitionLengths *pl = getPartitionLengths(&(tr->partitionData[model]));
+	      const partitionLengths 
+		*pl = getPartitionLengths(&(tr->partitionData[model]));
+	      
+	      MPI_Bcast(&(tr->partitionData[model].numberOfCategories), 1, MPI_INT, 0, MPI_COMM_WORLD);
 	      
 	      MPI_Bcast(tr->partitionData[model].EIGN,        pl->eignLength,        MPI_DOUBLE, 0, MPI_COMM_WORLD);
 	      MPI_Bcast(tr->partitionData[model].EV,          pl->evLength,          MPI_DOUBLE, 0, MPI_COMM_WORLD);
@@ -872,7 +860,7 @@ void startFineGrainMpi(tree *tr, analdef *adef)
   sendBufferInt[dataCounter++] = tr->multiBranch;
   sendBufferInt[dataCounter++] = tr->multiGene;
   sendBufferInt[dataCounter++] = tr->numBranches;
-  sendBufferInt[dataCounter++] = tr->NumberOfCategories;
+  
   sendBufferInt[dataCounter++] = tr->discreteRateCategories; 
   sendBufferInt[dataCounter++] = tr->rateHetModel;
   
@@ -886,6 +874,7 @@ void startFineGrainMpi(tree *tr, analdef *adef)
       sendBufferInt[dataCounter++] = tr->partitionData[model].mxtips;
       sendBufferInt[dataCounter++] = tr->partitionData[model].lower;
       sendBufferInt[dataCounter++] = tr->partitionData[model].upper;      
+      sendBufferInt[dataCounter++] = tr->partitionData[model].numberOfCategories;
       totalLength += (tr->partitionData[model].upper -  tr->partitionData[model].lower);
 
       assert(dataCounter <= sendBufferLength);
@@ -1011,14 +1000,15 @@ void masterBarrierMPI(int jobType, tree *tr)
       {	
 	job.length = 0;
 	sendMergedMessage(&job, tr);
-	
-
-	MPI_Bcast(&tr->NumberOfCategories, 1, MPI_INT, 0, MPI_COMM_WORLD);
+		
 	MPI_Bcast(tr->cdta->patrat, tr->originalCrunchedLength, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 	MPI_Bcast(tr->cdta->patratStored, tr->originalCrunchedLength, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 	
 	for(model = 0; model < tr->NumberOfModels; model++)
-	  MPI_Bcast(tr->partitionData[model].perSiteRates, tr->NumberOfCategories, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+	  { 
+	    MPI_Bcast(&(tr->partitionData[model].numberOfCategories), 1, MPI_INT, 0, MPI_COMM_WORLD);
+	    MPI_Bcast(tr->partitionData[model].perSiteRates, tr->partitionData[model].numberOfCategories, MPI_DOUBLE, 0, MPI_COMM_WORLD);	   
+	  }
 
 	
 	MPI_Bcast(tr->cdta->rateCategory, tr->originalCrunchedLength, MPI_INT,    0, MPI_COMM_WORLD);
@@ -1047,12 +1037,15 @@ void masterBarrierMPI(int jobType, tree *tr)
 	job.length = 0;
 	sendMergedMessage(&job, tr);
 	      
-	MPI_Bcast(&tr->NumberOfCategories, 1, MPI_INT, 0, MPI_COMM_WORLD);
+       
 
 	
 	for(model = 0; model < tr->NumberOfModels; model++)
 	  {
-	    const partitionLengths *pl = getPartitionLengths(&(tr->partitionData[model]));	  
+	    const partitionLengths 
+	      *pl = getPartitionLengths(&(tr->partitionData[model]));	  
+
+	    MPI_Bcast(&(tr->partitionData[model].numberOfCategories), 1, MPI_INT, 0, MPI_COMM_WORLD);
 	    
 	    MPI_Bcast(tr->partitionData[model].EIGN,        pl->eignLength,        MPI_DOUBLE, 0, MPI_COMM_WORLD);
 	    MPI_Bcast(tr->partitionData[model].EV,          pl->evLength,          MPI_DOUBLE, 0, MPI_COMM_WORLD);

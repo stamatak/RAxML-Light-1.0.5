@@ -103,9 +103,11 @@ void myBinFread(void *ptr, size_t size, size_t nmemb)
 
 void *malloc_aligned(size_t size) 
 {
-  void *ptr = (void *)NULL;
-  const size_t align = 16;
-  int res;
+  void 
+    *ptr = (void *)NULL;
+ 
+  int 
+    res;
   
 
 #if defined (__APPLE__)
@@ -118,9 +120,14 @@ void *malloc_aligned(size_t size)
   
   if(ptr == (void*)NULL) 
    assert(0);
+  
+#ifdef __AVX
+  assert(0);
+#endif
+
 
 #else
-  res = posix_memalign( &ptr, align, size );
+  res = posix_memalign( &ptr, BYTE_ALIGNMENT, size );
 
   if(res != 0) 
     assert(0);
@@ -2568,11 +2575,10 @@ static void allocPartitions(tree *tr)
       tr->partitionData[i].yVector = (unsigned char **)malloc(sizeof(unsigned char*) * (tr->mxtips + 1));
 
       
-      tr->partitionData[i].xVector = (double **)malloc(sizeof(double*) * tr->innerNodes);
-      if(tr->saveMemory)
-	tr->partitionData[i].xSpaceVector = (int *)calloc(tr->innerNodes, sizeof(int));
+      tr->partitionData[i].xVector = (double **)malloc(sizeof(double*) * tr->innerNodes);      
+      tr->partitionData[i].xSpaceVector = (size_t *)calloc(tr->innerNodes, sizeof(size_t));
 
-      tr->partitionData[i].pVector = (parsimonyVector **)malloc(sizeof(parsimonyVector*) * tr->innerNodes);
+     
      
 
       tr->partitionData[i].mxtips  = tr->mxtips;
@@ -2606,10 +2612,7 @@ static void allocNodex (tree *tr)
     model,
     offset,
     memoryRequirements = 0;
-  int    
-    *expArray = (int*)NULL;
-
-  double *likelihoodArray = (double*)NULL;  
+ 
 
   allocPartitions(tr);
 
@@ -2656,11 +2659,7 @@ static void allocNodex (tree *tr)
  
   
 
-  if(!tr->multiGene)
-    {     
-      likelihoodArray = (double *)malloc_aligned(tr->innerNodes * memoryRequirements * sizeof(double));
-      assert(likelihoodArray != NULL);
-    }
+  
   
   
 
@@ -2699,23 +2698,9 @@ static void allocNodex (tree *tr)
 
 
   for(i = 0; i < tr->innerNodes; i++)
-    {
-      offset = 0;
-
-      for(model = 0; model < (size_t)tr->NumberOfModels; model++)
-	{
-	  size_t width = tr->partitionData[model].upper - tr->partitionData[model].lower;
-
-	  if(!tr->multiGene)
-	    {	      	    	  	     
-	      if(tr->saveMemory)		
-		tr->partitionData[model].xVector[i]   = (double*)NULL;
-	      else		
-		tr->partitionData[model].xVector[i]   = &likelihoodArray[i * memoryRequirements + offset];		  		      		      	      
-	    }	
-	   
-	  offset += (size_t)(tr->discreteRateCategories) * (size_t)(tr->partitionData[model].states) * width;	 
-	}
+    {     
+      for(model = 0; model < (size_t)tr->NumberOfModels; model++)	    		
+	tr->partitionData[model].xVector[i]   = (double*)NULL;	      	   	 
     }
 }
 
@@ -5025,17 +5010,9 @@ static void threadFixModelIndices(tree *tr, tree *localTree, int tid, int n)
 
 	  /*localTree->partitionData[model].yVector[i+1]   = &localTree->y_ptr[i * myLength + countOffset];*/
 	  
-	  if(!localTree->saveMemory)
-	    {
-	      localTree->partitionData[model].xVector[i]   = &localTree->likelihoodArray[i * memoryRequirements + offset];
-	      localTree->partitionData[model].pVector[i]   = (parsimonyVector *)localTree->partitionData[model].xVector[i];
-	    }
-	  else
-	    {
-	      localTree->partitionData[model].xVector[i]   = (double*)NULL;
-	      localTree->partitionData[model].pVector[i]   = (parsimonyVector *)NULL;
-	      /* DYNAMIC: SOS what do we do here? Only allow operating on pre-defined starting trees?*/
-	    }       
+	 
+	  localTree->partitionData[model].xVector[i]   = (double*)NULL;
+	      
 	 
 
 	  countOffset += width;
@@ -5076,11 +5053,11 @@ static void threadFixModelIndices(tree *tr, tree *localTree, int tid, int n)
 
       localTree->partitionData[model].gapVectorLength = ((int)width / 32) + 1;
       
-      printf("s1\n");
+      
 
       memset(localTree->partitionData[model].gapVector, 0, localTree->partitionData[model].initialGapVectorSize);
 
-      printf("s2\n");
+      
 
       if(localTree->saveMemory)
 	{
@@ -5133,14 +5110,13 @@ static void initPartition(tree *tr, tree *localTree, int tid)
 
       localTree->cdta               = (cruncheddata*)malloc(sizeof(cruncheddata));
       localTree->cdta->patrat       = (double*)malloc(sizeof(double) * localTree->originalCrunchedLength);
-      localTree->cdta->patratStored = (double*)malloc(sizeof(double) * localTree->originalCrunchedLength);
-
-      localTree->NumberOfCategories = tr->NumberOfCategories;
+      localTree->cdta->patratStored = (double*)malloc(sizeof(double) * localTree->originalCrunchedLength);      
 
       localTree->discreteRateCategories = tr->discreteRateCategories;     
 
       for(model = 0; model < localTree->NumberOfModels; model++)
 	{
+	  localTree->partitionData[model].numberOfCategories    = tr->partitionData[model].numberOfCategories;
 	  localTree->partitionData[model].states     = tr->partitionData[model].states;
 	  localTree->partitionData[model].maxTipStates    = tr->partitionData[model].maxTipStates;
 	  localTree->partitionData[model].dataType   = tr->partitionData[model].dataType;
@@ -5211,15 +5187,7 @@ void allocNodex(tree *tr, int tid, int n)
     }
 
  
-#ifndef  _FINE_GRAIN_MPI
-  if(!tr->saveMemory)
-    {     
-      tr->likelihoodArray = (double *)malloc_aligned(tr->innerNodes * memoryRequirements * sizeof(double));
-      assert(tr->likelihoodArray != NULL);
-    }
-  else
-    tr->likelihoodArray = (double *)NULL;
-#endif	
+
    
 
   
@@ -5294,14 +5262,13 @@ static void broadcastPerSiteRates(tree *tr, tree *localTree)
 {
   int
     i = 0,
-    model = 0;
-
-
-  assert(tr->NumberOfCategories == localTree->NumberOfCategories);
+    model = 0;  
 
   for(model = 0; model < localTree->NumberOfModels; model++)
     {
-      for(i = 0; i < localTree->NumberOfCategories; i++)
+      localTree->partitionData[model].numberOfCategories = tr->partitionData[model].numberOfCategories;
+      
+      for(i = 0; i < localTree->partitionData[model].numberOfCategories; i++)
 	localTree->partitionData[model].perSiteRates[i] = tr->partitionData[model].perSiteRates[i];
     }
 
@@ -5508,8 +5475,7 @@ static void execFunction(tree *tr, tree *localTree, int tid, int n)
       break;               
     case THREAD_COPY_INIT_MODEL:
       if(tid > 0)
-	{
-	  localTree->NumberOfCategories = tr->NumberOfCategories;
+	{	  
 	  localTree->rateHetModel       = tr->rateHetModel;
 
 	  for(model = 0; model < localTree->NumberOfModels; model++)
@@ -5529,7 +5495,9 @@ static void execFunction(tree *tr, tree *localTree, int tid, int n)
 	       localTree->partitionData[model].alpha = tr->partitionData[model].alpha;
 	       
 	       localTree->partitionData[model].lower      = tr->partitionData[model].lower;
-	       localTree->partitionData[model].upper      = tr->partitionData[model].upper;
+	       localTree->partitionData[model].upper      = tr->partitionData[model].upper; 
+	       
+	       localTree->partitionData[model].numberOfCategories      = tr->partitionData[model].numberOfCategories;
 	    }
 
 	  memcpy(localTree->cdta->patrat,        tr->cdta->patrat,      localTree->originalCrunchedLength * sizeof(double));
@@ -5567,8 +5535,7 @@ static void execFunction(tree *tr, tree *localTree, int tid, int n)
       break;
     case THREAD_COPY_RATE_CATS:
       if(tid > 0)
-	{
-	  localTree->NumberOfCategories = tr->NumberOfCategories;
+	{	  
 	  memcpy(localTree->cdta->patrat,       tr->cdta->patrat,         localTree->originalCrunchedLength * sizeof(double));
 	  memcpy(localTree->cdta->patratStored, tr->cdta->patratStored,   localTree->originalCrunchedLength * sizeof(double));
 	  broadcastPerSiteRates(tr, localTree);
@@ -5576,6 +5543,8 @@ static void execFunction(tree *tr, tree *localTree, int tid, int n)
 
       for(model = 0; model < localTree->NumberOfModels; model++)
 	{
+	  localTree->partitionData[model].numberOfCategories = tr->partitionData[model].numberOfCategories;
+	  
 	  for(localCounter = 0, i = localTree->partitionData[model].lower;  i < localTree->partitionData[model].upper; i++)
 	    {
 	      if(i % n == tid)

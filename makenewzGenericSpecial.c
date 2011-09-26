@@ -1254,7 +1254,7 @@ void execCore(tree *tr, volatile double *_dlnLdlz, volatile double *_d2lnLdlz2)
 	   
 	    case DNA_DATA:
 	      if(tr->rateHetModel == CAT)
-		coreGTRCAT(width, tr->NumberOfCategories, sumBuffer,
+		coreGTRCAT(width, tr->partitionData[model].numberOfCategories, sumBuffer,
 			   &dlnLdlz, &d2lnLdlz2, tr->partitionData[model].wr, tr->partitionData[model].wr2,
 			   tr->partitionData[model].perSiteRates, tr->partitionData[model].EIGN,  tr->partitionData[model].rateCategory, lz);
 	      else 
@@ -1265,7 +1265,7 @@ void execCore(tree *tr, volatile double *_dlnLdlz, volatile double *_d2lnLdlz2)
 	      break;		    
 	    case AA_DATA:
 	      if(tr->rateHetModel == CAT)
-		coreGTRCATPROT(tr->partitionData[model].EIGN, lz, tr->NumberOfCategories,  tr->partitionData[model].perSiteRates,
+		coreGTRCATPROT(tr->partitionData[model].EIGN, lz, tr->partitionData[model].numberOfCategories,  tr->partitionData[model].perSiteRates,
 			       tr->partitionData[model].rateCategory, width,
 			       tr->partitionData[model].wr, tr->partitionData[model].wr2,
 			       &dlnLdlz, &d2lnLdlz2,
