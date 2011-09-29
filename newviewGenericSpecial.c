@@ -47,7 +47,7 @@
 #include <xmmintrin.h>
 #include <pmmintrin.h>
 
-const union __attribute__ ((aligned (16)))
+const union __attribute__ ((aligned (BYTE_ALIGNMENT)))
 {
        uint64_t i[2];
        __m128d m;
@@ -80,11 +80,11 @@ static void makeP(double z1, double z2, double *rptr, double *EI,  double *EIGN,
     case DNA_DATA:
       {
 	double 
-	  d1[4] __attribute__ ((aligned (16))), 
-	  d2[4] __attribute__ ((aligned (16))),
+	  d1[4] __attribute__ ((aligned (BYTE_ALIGNMENT))), 
+	  d2[4] __attribute__ ((aligned (BYTE_ALIGNMENT))),
 	  ez1[3], 
 	  ez2[3],
-	  EI_16[16] __attribute__ ((aligned (16)));
+	  EI_16[16] __attribute__ ((aligned (BYTE_ALIGNMENT)));
 	
 	  	  
 	for(j = 0; j < 4; j++)
@@ -278,8 +278,8 @@ static void newviewGTRGAMMA_GAPPED_SAVE(int tipCase,
     *x1_ptr = x1_start,
     *x2_ptr = x2_start,       
     max,
-    maxima[2] __attribute__ ((aligned (16))),        
-    EV_t[16] __attribute__ ((aligned (16)));      
+    maxima[2] __attribute__ ((aligned (BYTE_ALIGNMENT))),        
+    EV_t[16] __attribute__ ((aligned (BYTE_ALIGNMENT)));      
     
   __m128d 
     values[8],
@@ -298,7 +298,7 @@ static void newviewGTRGAMMA_GAPPED_SAVE(int tipCase,
     {
     case TIP_TIP:
       {
-	double *uX1, umpX1[256] __attribute__ ((aligned (16))), *uX2, umpX2[256] __attribute__ ((aligned (16)));
+	double *uX1, umpX1[256] __attribute__ ((aligned (BYTE_ALIGNMENT))), *uX2, umpX2[256] __attribute__ ((aligned (BYTE_ALIGNMENT)));
 
 
 	for (i = 1; i < 16; i++)
@@ -459,7 +459,7 @@ static void newviewGTRGAMMA_GAPPED_SAVE(int tipCase,
       {	
 	double 
 	  *uX1, 
-	  umpX1[256] __attribute__ ((aligned (16)));		 
+	  umpX1[256] __attribute__ ((aligned (BYTE_ALIGNMENT)));		 
 
 	for (i = 1; i < 16; i++)
 	  {
@@ -1177,8 +1177,8 @@ static void newviewGTRGAMMA(int tipCase,
     *x2,
     *x3,
     max,
-    maxima[2] __attribute__ ((aligned (16))),       
-    EV_t[16] __attribute__ ((aligned (16)));      
+    maxima[2] __attribute__ ((aligned (BYTE_ALIGNMENT))),       
+    EV_t[16] __attribute__ ((aligned (BYTE_ALIGNMENT)));      
     
   __m128d 
     values[8],
@@ -1195,7 +1195,7 @@ static void newviewGTRGAMMA(int tipCase,
     {
     case TIP_TIP:
       {
-	double *uX1, umpX1[256] __attribute__ ((aligned (16))), *uX2, umpX2[256] __attribute__ ((aligned (16)));
+	double *uX1, umpX1[256] __attribute__ ((aligned (BYTE_ALIGNMENT))), *uX2, umpX2[256] __attribute__ ((aligned (BYTE_ALIGNMENT)));
 
 
 	for (i = 1; i < 16; i++)
@@ -1302,7 +1302,7 @@ static void newviewGTRGAMMA(int tipCase,
       break;
     case TIP_INNER:
       {	
-	double *uX1, umpX1[256] __attribute__ ((aligned (16)));
+	double *uX1, umpX1[256] __attribute__ ((aligned (BYTE_ALIGNMENT)));
 
 
 	for (i = 1; i < 16; i++)
@@ -1680,7 +1680,7 @@ static void newviewGTRCAT( int tipCase,  double *EV,  int *cptr,
     *x1,
     *x2, 
     *x3, 
-    EV_t[16] __attribute__ ((aligned (16)));
+    EV_t[16] __attribute__ ((aligned (BYTE_ALIGNMENT)));
     
   int 
     i, 
@@ -2122,7 +2122,7 @@ static void newviewGTRCAT_SAVE( int tipCase,  double *EV,  int *cptr,
     *x1_ptr = x1_start,
     *x2_ptr = x2_start, 
     *x3_ptr = x3_start, 
-    EV_t[16] __attribute__ ((aligned (16)));
+    EV_t[16] __attribute__ ((aligned (BYTE_ALIGNMENT)));
     
   int 
     i, 

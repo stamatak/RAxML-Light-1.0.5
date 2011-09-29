@@ -523,7 +523,7 @@ static double evaluateGTRCAT_SAVE (int *ex1, int *ex2, int *cptr, int *wptr,
     {           
       for (i = 0; i < n; i++) 
 	{	
-	  double t[2] __attribute__ ((aligned (16)));
+	  double t[2] __attribute__ ((aligned (BYTE_ALIGNMENT)));
 	  __m128d x1v1, x1v2, x2v1, x2v2, dv1, dv2;
 
 	  x1 = &(tipVector[4 * tipX1[i]]);
@@ -566,7 +566,7 @@ static double evaluateGTRCAT_SAVE (int *ex1, int *ex2, int *cptr, int *wptr,
     {
       for (i = 0; i < n; i++) 
 	{ 
-	  double t[2] __attribute__ ((aligned (16)));
+	  double t[2] __attribute__ ((aligned (BYTE_ALIGNMENT)));
 	  __m128d x1v1, x1v2, x2v1, x2v2, dv1, dv2;
 	   
 	  if(isGap(x1_gap, i))
@@ -637,7 +637,7 @@ static double evaluateGTRGAMMA_GAPPED_SAVE(int *ex1, int *ex2, int *wptr,
       
       for (i = 0; i < n; i++)
 	{
-	  double t[2] __attribute__ ((aligned (16)));
+	  double t[2] __attribute__ ((aligned (BYTE_ALIGNMENT)));
 	  __m128d termv, x1v, x2v, dv;
 
 	  x1 = &(tipVector[4 * tipX1[i]]);	 
@@ -689,7 +689,7 @@ static double evaluateGTRGAMMA_GAPPED_SAVE(int *ex1, int *ex2, int *wptr,
       for (i = 0; i < n; i++) 
 	{
 
-	  double t[2] __attribute__ ((aligned (16)));
+	  double t[2] __attribute__ ((aligned (BYTE_ALIGNMENT)));
 	  __m128d termv, x1v, x2v, dv;
 
 	  if(x1_gap[i / 32] & mask32[i % 32])
@@ -765,7 +765,7 @@ static double evaluateGTRGAMMA(int *ex1, int *ex2, int *wptr,
       for (i = 0; i < n; i++)
 	{
 #ifdef __SIM_SSE3
-	  double t[2] __attribute__ ((aligned (16)));
+	  double t[2] __attribute__ ((aligned (BYTE_ALIGNMENT)));
 	  __m128d termv, x1v, x2v, dv;
 #endif
 	  x1 = &(tipVector[4 * tipX1[i]]);	 
@@ -821,7 +821,7 @@ static double evaluateGTRGAMMA(int *ex1, int *ex2, int *wptr,
       for (i = 0; i < n; i++) 
 	{
 #ifdef __SIM_SSE3
-	  double t[2] __attribute__ ((aligned (16)));
+	  double t[2] __attribute__ ((aligned (BYTE_ALIGNMENT)));
 	  __m128d termv, x1v, x2v, dv;
 #endif
 	  	 	  	  
@@ -893,7 +893,7 @@ static double evaluateGTRCAT (int *ex1, int *ex2, int *cptr, int *wptr,
       for (i = 0; i < n; i++) 
 	{	
 #ifdef __SIM_SSE3
-	  double t[2] __attribute__ ((aligned (16)));
+	  double t[2] __attribute__ ((aligned (BYTE_ALIGNMENT)));
 	  __m128d x1v1, x1v2, x2v1, x2v2, dv1, dv2;
 #endif
 	  x1 = &(tipVector[4 * tipX1[i]]);
@@ -938,7 +938,7 @@ static double evaluateGTRCAT (int *ex1, int *ex2, int *cptr, int *wptr,
       for (i = 0; i < n; i++) 
 	{ 
 #ifdef __SIM_SSE3
-	  double t[2] __attribute__ ((aligned (16)));
+	  double t[2] __attribute__ ((aligned (BYTE_ALIGNMENT)));
 	   __m128d x1v1, x1v2, x2v1, x2v2, dv1, dv2;
 #endif
 	  x1 = &x1_start[4 * i];

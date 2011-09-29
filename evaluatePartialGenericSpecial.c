@@ -84,10 +84,10 @@ static inline void computeVectorGTRCATPROT(double *lVector, int *eVector, double
      
   {
     double  
-      e1[20] __attribute__ ((aligned (16))),
-      e2[20] __attribute__ ((aligned (16))),
-      d1[20] __attribute__ ((aligned (16))), 
-      d2[20] __attribute__ ((aligned (16))), 
+      e1[20] __attribute__ ((aligned (BYTE_ALIGNMENT))),
+      e2[20] __attribute__ ((aligned (BYTE_ALIGNMENT))),
+      d1[20] __attribute__ ((aligned (BYTE_ALIGNMENT))), 
+      d2[20] __attribute__ ((aligned (BYTE_ALIGNMENT))), 
       lz1, lz2;  
     int l, k, scale;
      
@@ -185,7 +185,7 @@ static double evaluatePartialGTRCATPROT(int i, double ki, int counter,  traversa
   int scale = 0, k, l;
   double 
     *lVector = (double *)malloc_aligned(sizeof(double) * 20 * mxtips),
-    myEI[400]  __attribute__ ((aligned (16)));
+    myEI[400]  __attribute__ ((aligned (BYTE_ALIGNMENT)));
 
   traversalInfo *trav = &ti[0];
 
