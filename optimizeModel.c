@@ -1499,77 +1499,84 @@ void optRateCatPthreads(tree *tr, double lower_spacing, double upper_spacing, do
     i;
 
   for(model = 0; model < tr->NumberOfModels; model++)
-    {               
-      for(i = tr->partitionData[model].lower, localIndex = 0;  i < tr->partitionData[model].upper; i++)
-	{
-	  if(i % n == tid)
-	    {
+    {      
+      int 
+	localIndex = 0;
+
+      boolean 
+	execute = ((tr->manyPartitions && isThisMyPartition(tr, tid, model, n)) || (!tr->manyPartitions));
+
+      if(execute)
+	for(i = tr->partitionData[model].lower;  i < tr->partitionData[model].upper; i++)
+	  {
+	    if(tr->manyPartitions || (i % n == tid))
+	      {
 	      
-	      double initialRate, initialLikelihood, 
-		leftLH, rightLH, leftRate, rightRate, v;
-	      const double epsilon = 0.00001;
-	      int k;	      
-	      
-	      tr->cdta->patrat[i] = tr->cdta->patratStored[i];     
-	      initialRate = tr->cdta->patrat[i];
-	      
-	      initialLikelihood = evaluatePartialGeneric(tr, localIndex, initialRate, model); /* i is real i ??? */
-	      
-	      
-	      leftLH = rightLH = initialLikelihood;
-	      leftRate = rightRate = initialRate;
-	      
-	      k = 1;
-	      
-	      while((initialRate - k * lower_spacing > 0.0001) && 
-		    ((v = evaluatePartialGeneric(tr, localIndex, initialRate - k * lower_spacing, model)) 
-		     > leftLH) && 
-		    (fabs(leftLH - v) > epsilon))  
-		{	  
+		double initialRate, initialLikelihood, 
+		  leftLH, rightLH, leftRate, rightRate, v;
+		const double epsilon = 0.00001;
+		int k;	      
+		
+		tr->cdta->patrat[i] = tr->cdta->patratStored[i];     
+		initialRate = tr->cdta->patrat[i];
+		
+		initialLikelihood = evaluatePartialGeneric(tr, localIndex, initialRate, model); /* i is real i ??? */
+		
+		
+		leftLH = rightLH = initialLikelihood;
+		leftRate = rightRate = initialRate;
+		
+		k = 1;
+		
+		while((initialRate - k * lower_spacing > 0.0001) && 
+		      ((v = evaluatePartialGeneric(tr, localIndex, initialRate - k * lower_spacing, model)) 
+		       > leftLH) && 
+		      (fabs(leftLH - v) > epsilon))  
+		  {	  
 #ifndef WIN32
-		  if(isnan(v))
-		    assert(0);
+		    if(isnan(v))
+		      assert(0);
 #endif
-		  
-		  leftLH = v;
-		  leftRate = initialRate - k * lower_spacing;
-		  k++;	  
-		}      
-	      
-	      k = 1;
-	      
-	      while(((v = evaluatePartialGeneric(tr, localIndex, initialRate + k * upper_spacing, model)) > rightLH) &&
-		    (fabs(rightLH - v) > epsilon))    	
-		{
+		    
+		    leftLH = v;
+		    leftRate = initialRate - k * lower_spacing;
+		    k++;	  
+		  }      
+		
+		k = 1;
+		
+		while(((v = evaluatePartialGeneric(tr, localIndex, initialRate + k * upper_spacing, model)) > rightLH) &&
+		      (fabs(rightLH - v) > epsilon))    	
+		  {
 #ifndef WIN32
-		  if(isnan(v))
-		    assert(0);
+		    if(isnan(v))
+		      assert(0);
 #endif     
-		  rightLH = v;
-		  rightRate = initialRate + k * upper_spacing;	 
-		  k++;
-		}           
-	      
-	      if(rightLH > initialLikelihood || leftLH > initialLikelihood)
-		{
-		  if(rightLH > leftLH)	    
-		    {	     
-		      tr->cdta->patrat[i] = rightRate;
-		      lhs[i] = rightLH;
-		    }
-		  else
-		    {	      
-		      tr->cdta->patrat[i] = leftRate;
-		      lhs[i] = leftLH;
-		    }
-		}
-	      else
-		lhs[i] = initialLikelihood;
-	      
-	      tr->cdta->patratStored[i] = tr->cdta->patrat[i];
-	      localIndex++;
-	    }
-	}
+		    rightLH = v;
+		    rightRate = initialRate + k * upper_spacing;	 
+		    k++;
+		  }           
+		
+		if(rightLH > initialLikelihood || leftLH > initialLikelihood)
+		  {
+		    if(rightLH > leftLH)	    
+		      {	     
+			tr->cdta->patrat[i] = rightRate;
+			lhs[i] = rightLH;
+		      }
+		    else
+		      {	      
+			tr->cdta->patrat[i] = leftRate;
+			lhs[i] = leftLH;
+		      }
+		  }
+		else
+		  lhs[i] = initialLikelihood;
+		
+		tr->cdta->patratStored[i] = tr->cdta->patrat[i];
+		localIndex++;
+	      }
+	  }
       assert(localIndex == tr->partitionData[model].width);    
     }
 }

@@ -3228,7 +3228,6 @@ static void initGeneric(const int n, const unsigned int *valueVector, int valueV
   d       = (double*)malloc(n * sizeof(double));
   invfreq = (double*)malloc(n * sizeof(double));
   EIGN    = (double*)malloc(n * sizeof(double));
-
   
   for(l = 0; l < n; l++)		 
     f[l] = frequencies[l];	
@@ -3406,7 +3405,7 @@ void initReversibleGTR(tree *tr, analdef *adef, int model)
    case SECONDARY_DATA_7: 
    case SECONDARY_DATA:
    case DNA_DATA:
-   case BINARY_DATA:
+   case BINARY_DATA:    
      initGeneric(states, 
 		 getBitVector(tr->partitionData[model].dataType), 
 		 getUndetermined(tr->partitionData[model].dataType) + 1, 
@@ -3420,7 +3419,7 @@ void initReversibleGTR(tree *tr, analdef *adef, int model)
 		 model, 
 		 FALSE, 
 		 (float*)NULL, 
-		 (float*)NULL);
+		 (float*)NULL);    
      break;   
    case AA_DATA:
      if(tr->partitionData[model].protModels != GTR)           
@@ -4011,19 +4010,13 @@ void initModel(tree *tr, rawdata *rdta, cruncheddata *cdta, analdef *adef)
       tr->partitionData[model].perSiteRates[0] = 1.0; 
     }
   
+ 
+  
   updatePerSiteRates(tr, FALSE);
  
-   
   setupSecondaryStructureSymmetries(tr);
   
-
-  
-
- 
-
   initRateMatrix(tr); 
-   
-
 
   if(adef->readBinaryFile)
     {
@@ -4036,22 +4029,22 @@ void initModel(tree *tr, rawdata *rdta, cruncheddata *cdta, analdef *adef)
     }
 #ifndef _FINE_GRAIN_MPI
   else
-    {
+    {      
       baseFrequenciesGTR(rdta, cdta, tr);  
     }
 #endif
- 
+  
   for(model = 0; model < tr->NumberOfModels; model++)
     {
       tr->partitionData[model].alpha = 1.0;    
       if(tr->partitionData[model].protModels == AUTO)
 	tr->partitionData[model].autoProtModels = WAG; /* initialize by WAG per default */
-            
+      
       initReversibleGTR(tr, adef, model);               
-      makeGammaCats(tr->partitionData[model].alpha, tr->partitionData[model].gammaRates, 4); 
-    }   
-                		         
-                 
+      
+      makeGammaCats(tr->partitionData[model].alpha, tr->partitionData[model].gammaRates, 4);     
+    }                   		       
+  
   if(tr->NumberOfModels > 1)
     {
       tr->fracchange = 0;
@@ -4060,14 +4053,19 @@ void initModel(tree *tr, rawdata *rdta, cruncheddata *cdta, analdef *adef)
       
       tr->fracchange /= ((double)tr->NumberOfModels);
     }  
-
+  
 #ifdef _FINE_GRAIN_MPI
   masterBarrierMPI(THREAD_COPY_INIT_MODEL, tr);  
 #endif
 
+ 
+
 #ifdef _USE_PTHREADS
   masterBarrier(THREAD_COPY_INIT_MODEL, tr);   
 #endif
+
+ 
+
 }
 
 

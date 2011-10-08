@@ -1143,11 +1143,13 @@ void makenewzIterative(tree *tr)
     newviewIterative(tr);
 
   for(model = 0; model < tr->NumberOfModels; model++)
-    {
-      if(tr->executeModel[model])
+    { 
+      int 
+	width = tr->partitionData[model].width;
+      
+      if(tr->executeModel[model] && width > 0)
 	{
-	  int 
-	    width = tr->partitionData[model].width,
+	  int 	   
 	    states = tr->partitionData[model].states;
 
 	  
@@ -1218,10 +1220,12 @@ void execCore(tree *tr, volatile double *_dlnLdlz, volatile double *_d2lnLdlz2)
 
   for(model = 0; model < tr->NumberOfModels; model++)
     {
-      if(tr->executeModel[model])
+       int 
+	 width = tr->partitionData[model].width;
+
+      if(tr->executeModel[model] && width > 0)
 	{
-	  int 
-	    width = tr->partitionData[model].width,
+	  int 	    
 	    states = tr->partitionData[model].states;
 	  
 	  double 
@@ -1281,6 +1285,14 @@ void execCore(tree *tr, volatile double *_dlnLdlz, volatile double *_d2lnLdlz2)
 
 	  _dlnLdlz[branchIndex]   = _dlnLdlz[branchIndex]   + dlnLdlz;
 	  _d2lnLdlz2[branchIndex] = _d2lnLdlz2[branchIndex] + d2lnLdlz2;
+	}
+      else
+	{
+	  if(width == 0 && tr->multiBranch)
+	    {
+	      _dlnLdlz[model]   = 0.0;
+	      _d2lnLdlz2[model] = 0.0;
+	    }			       	    	   
 	}
     }
 

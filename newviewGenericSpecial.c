@@ -4584,15 +4584,16 @@ void newviewIterative (tree *tr)
     i, 
     model;
 
-  
-
   for(i = 1; i < tr->td[0].count; i++)
     {
       traversalInfo *tInfo = &ti[i];
 
       for(model = 0; model < tr->NumberOfModels; model++)
 	{
-	  if(tr->executeModel[model])
+	  size_t		
+	    width  = (size_t)tr->partitionData[model].width;
+
+	  if(tr->executeModel[model] && width > 0)
 	    {	      
 	      double
 		*x1_start = (double*)NULL,
@@ -4625,10 +4626,9 @@ void newviewIterative (tree *tr)
 	      size_t
 		gapOffset,
 		rateHet,
-		states = (size_t)tr->partitionData[model].states,
-		width  = (size_t)tr->partitionData[model].width,
+		states = (size_t)tr->partitionData[model].states,	
 		availableLength = tr->partitionData[model].xSpaceVector[(tInfo->pNumber - tr->mxtips - 1)],
-		requiredLength = 0;
+		requiredLength = 0;	     
 
 	      if(tr->rateHetModel == CAT)
 		rateHet = 1;
@@ -4729,11 +4729,7 @@ void newviewIterative (tree *tr)
 		{
 		  qz = tInfo->qz[0];
 		  rz = tInfo->rz[0];
-		}	      	      	      
-
-	     
-
-	      
+		}	      	      	      	     	      
 
 	      switch(tr->partitionData[model].dataType)
 		{		

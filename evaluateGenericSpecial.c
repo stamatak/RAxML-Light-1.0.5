@@ -1001,12 +1001,14 @@ double evaluateIterative(tree *tr,  boolean writeVector)
   newviewIterative(tr);  
 
   for(model = 0; model < tr->NumberOfModels; model++)
-    {            
-      if(tr->executeModel[model])
+    {    
+      int 	    
+	width = tr->partitionData[model].width;
+        
+      if(tr->executeModel[model] && width > 0)
 	{	
 	  int 
-	    rateHet,
-	    width = tr->partitionData[model].width,
+	    rateHet,	  
 	    states = tr->partitionData[model].states;
 	  
 	  double 
@@ -1166,6 +1168,11 @@ double evaluateIterative(tree *tr,  boolean writeVector)
 	  
 	  result += partitionLikelihood;	  
 	  tr->perPartitionLH[model] = partitionLikelihood; 	  
+	}
+      else
+	{
+	  if(width == 0)	    
+	    tr->perPartitionLH[model] = 0.0;	   
 	}
     }
       
@@ -1372,7 +1379,7 @@ double evaluateGeneric (tree *tr, nodeptr p)
 
   tr->likelihood = result;    
 
-  
+ 
 
   return result;
 }

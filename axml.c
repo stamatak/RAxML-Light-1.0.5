@@ -2656,14 +2656,7 @@ static void allocNodex (tree *tr)
   tr->perSiteLL       = (double *)malloc((size_t)tr->cdta->endsite * sizeof(double));
   assert(tr->perSiteLL != NULL);
 
- 
   
-
-  
-  
-  
-
- 
   tr->sumBuffer  = (double *)malloc_aligned(memoryRequirements * sizeof(double));
   assert(tr->sumBuffer != NULL);
    
@@ -3334,6 +3327,9 @@ static void printREADME(void)
   printf("      [-o outGroupName1[,outGroupName2[,...]]] \n");
   printf("      [-P proteinModel]\n");
   printf("      [-q multipleModelFileName] \n");
+#if (defined(_USE_PTHREADS) || (_FINE_GRAIN_MPI))
+  printf("      [-Q]\n");
+#endif
   printf("      [-S]\n");
   printf("      [-T numberOfThreads]\n");  
   printf("      [-v]\n"); 
@@ -3422,6 +3418,11 @@ static void printREADME(void)
   printf("      -q      Specify the file name which contains the assignment of models to alignment\n");
   printf("              partitions for multiple models of substitution. For the syntax of this file\n");
   printf("              please consult the manual.\n");  
+  printf("\n");
+#if (defined(_USE_PTHREADS) || (_FINE_GRAIN_MPI))
+  printf("      -Q      Enable alternative data/load distribution algorithm for datasets with many partitions\n");
+  printf("              In particular under CAT this can lead to parallel performance improvements of over 50 per cent\n");
+#endif
   printf("\n");
   printf("      -R      read in a binary checkpoint file called RAxML_binaryCheckpoint.RUN_ID_number\n");
   printf("\n");
@@ -3546,15 +3547,27 @@ static void get_args(int argc, char *argv[], analdef *adef, tree *tr)
   tr->multiStateModel  = GTR_MULTI_STATE;
   tr->useGappedImplementation = FALSE;
   tr->saveMemory = FALSE;
+#if (defined(_USE_PTHREADS) || (_FINE_GRAIN_MPI))
+  tr->manyPartitions = FALSE;
+#endif
   
   /********* tr inits end*************/
 
-
+#if (defined(_USE_PTHREADS) || (_FINE_GRAIN_MPI))
   while(!bad_opt &&
-	((c = mygetopt(argc,argv,"T:P:R:e:c:f:i:m:t:w:s:n:o:q:G:vhMSDB", &optind, &optarg))!=-1))
+	((c = mygetopt(argc,argv,"T:P:R:e:c:f:i:m:t:w:s:n:o:q:G:vhMSDBQ", &optind, &optarg))!=-1))
+#else
+    while(!bad_opt &&
+	  ((c = mygetopt(argc,argv,"T:P:R:e:c:f:i:m:t:w:s:n:o:q:G:vhMSDB", &optind, &optarg))!=-1))
+#endif
     {
     switch(c)
       {
+#if (defined(_USE_PTHREADS) || (_FINE_GRAIN_MPI))	
+      case 'Q':
+	tr->manyPartitions = TRUE;
+	break;
+#endif
       case 'G':
 	{
 	  char byteFileName[1024] = "";
@@ -4923,6 +4936,37 @@ static void finalizeInfoFile(tree *tr, analdef *adef)
 
 
 
+boolean isThisMyPartition(tree *localTree, int tid, int model, int numberOfThreads)
+{ 
+  if(localTree->partitionAssignment[model] == tid)
+    return TRUE;
+  else
+    return FALSE;
+}
+
+static void computeFractionMany(tree *localTree, int tid, int n)
+{
+  int
+    sites = 0;
+
+  int
+    i,
+    model;
+
+  for(model = 0; model < localTree->NumberOfModels; model++)
+    {
+      if(isThisMyPartition(localTree, tid, model, n))
+	{	 
+	  localTree->partitionData[model].width = localTree->partitionData[model].upper - localTree->partitionData[model].lower;
+	  sites += localTree->partitionData[model].width;
+	}
+      else       	  
+	localTree->partitionData[model].width = 0;       
+    }
+
+  
+}
+
 
 
 static void computeFraction(tree *localTree, int tid, int n)
@@ -4963,16 +5007,16 @@ static void threadFixModelIndices(tree *tr, tree *localTree, int tid, int n)
       localTree->partitionData[model].lower      = tr->partitionData[model].lower;
       localTree->partitionData[model].upper      = tr->partitionData[model].upper;
     }
-
-  computeFraction(localTree, tid, n);
+  
+  if(tr->manyPartitions)
+    computeFractionMany(localTree, tid, n);
+  else
+    computeFraction(localTree, tid, n);
 
   for(model = 0, offset = 0, countOffset = 0; model < (size_t)localTree->NumberOfModels; model++)
-    {
-      
-      
+    {           
       localTree->partitionData[model].sumBuffer       = &localTree->sumBuffer[offset];
       
-
       localTree->partitionData[model].perSiteLL    = &localTree->perSiteLLPtr[countOffset];          
 
       localTree->partitionData[model].wgt          = &localTree->wgtPtr[countOffset];
@@ -4990,6 +5034,7 @@ static void threadFixModelIndices(tree *tr, tree *localTree, int tid, int n)
 
   /* figure in data */   
 
+
   for(i = 0; i < (size_t)localTree->mxtips; i++)
     {
       for(model = 0, offset = 0, countOffset = 0; model < (size_t)localTree->NumberOfModels; model++)
@@ -5004,17 +5049,11 @@ static void threadFixModelIndices(tree *tr, tree *localTree, int tid, int n)
     {
       for(model = 0, offset = 0, countOffset = 0; model < (size_t)localTree->NumberOfModels; model++)
 	{
-	  size_t width = localTree->partitionData[model].width;
-
-	  
-
-	  /*localTree->partitionData[model].yVector[i+1]   = &localTree->y_ptr[i * myLength + countOffset];*/
-	  
-	 
+	  size_t 
+	    width = localTree->partitionData[model].width;	  	  
+	  	 
 	  localTree->partitionData[model].xVector[i]   = (double*)NULL;
-	      
-	 
-
+	      	 
 	  countOffset += width;
 
 	  offset += (size_t)(tr->discreteRateCategories) * (size_t)(tr->partitionData[model].states) * width;
@@ -5023,23 +5062,45 @@ static void threadFixModelIndices(tree *tr, tree *localTree, int tid, int n)
       assert(countOffset == myLength);
     }
 
-  for(model = 0, globalCounter = 0; model < (size_t)localTree->NumberOfModels; model++)
-    {
-      for(localCounter = 0, i = (size_t)localTree->partitionData[model].lower;  i < (size_t)localTree->partitionData[model].upper; i++)
-	{
-	  if(i % (size_t)n == (size_t)tid)
-	    {
-	      localTree->partitionData[model].wgt[localCounter]          = tr->cdta->aliaswgt[globalCounter];	      	     
-	      localTree->partitionData[model].rateCategory[localCounter] = tr->cdta->rateCategory[globalCounter];	      
-
-	      for(j = 1; j <= (size_t)localTree->mxtips; j++)
-	       localTree->partitionData[model].yVector[j][localCounter] = tr->yVector[j][globalCounter]; 	     
-
-	      localCounter++;
-	    }
-	  globalCounter++;
-	}
-    }
+  if(tr->manyPartitions)
+    for(model = 0, globalCounter = 0; model < (size_t)localTree->NumberOfModels; model++)
+      {
+	if(isThisMyPartition(localTree, tid, model, n))
+	  {
+	    assert(localTree->partitionData[model].upper - localTree->partitionData[model].lower == localTree->partitionData[model].width);
+	    
+	    for(localCounter = 0, i = (size_t)localTree->partitionData[model].lower;  i < (size_t)localTree->partitionData[model].upper; i++, localCounter++)
+	      {	    
+		localTree->partitionData[model].wgt[localCounter]          = tr->cdta->aliaswgt[globalCounter];	      	     
+		localTree->partitionData[model].rateCategory[localCounter] = tr->cdta->rateCategory[globalCounter];	      
+		
+		for(j = 1; j <= (size_t)localTree->mxtips; j++)
+		  localTree->partitionData[model].yVector[j][localCounter] = tr->yVector[j][globalCounter]; 	     
+		
+		globalCounter++;
+	      }
+	  }
+      else
+	globalCounter += (localTree->partitionData[model].upper - localTree->partitionData[model].lower);
+      }
+  else
+    for(model = 0, globalCounter = 0; model < (size_t)localTree->NumberOfModels; model++)
+      {
+	for(localCounter = 0, i = (size_t)localTree->partitionData[model].lower;  i < (size_t)localTree->partitionData[model].upper; i++)
+	  {
+	    if(i % (size_t)n == (size_t)tid)
+	      {
+		localTree->partitionData[model].wgt[localCounter]          = tr->cdta->aliaswgt[globalCounter];	      	     
+		localTree->partitionData[model].rateCategory[localCounter] = tr->cdta->rateCategory[globalCounter];	      
+		
+		for(j = 1; j <= (size_t)localTree->mxtips; j++)
+		  localTree->partitionData[model].yVector[j][localCounter] = tr->yVector[j][globalCounter]; 	     
+		
+		localCounter++;
+	      }
+	    globalCounter++;
+	  }
+      }
   
   for(model = 0; model < (size_t)localTree->NumberOfModels; model++)
     {
@@ -5049,22 +5110,23 @@ static void threadFixModelIndices(tree *tr, tree *localTree, int tid, int n)
       size_t
 	width =  localTree->partitionData[model].width;
       
-      
-
-      localTree->partitionData[model].gapVectorLength = ((int)width / 32) + 1;
-      
-      
-
-      memset(localTree->partitionData[model].gapVector, 0, localTree->partitionData[model].initialGapVectorSize);
-
-      
-
-      if(localTree->saveMemory)
+      if(width > 0)
 	{
-	  for(j = 1; j <= (size_t)(localTree->mxtips); j++)
-	    for(i = 0; i < width; i++)
-	      if(localTree->partitionData[model].yVector[j][i] == undetermined)
-		localTree->partitionData[model].gapVector[localTree->partitionData[model].gapVectorLength * j + i / 32] |= mask32[i % 32];
+	  localTree->partitionData[model].gapVectorLength = ((int)width / 32) + 1;
+          
+	  memset(localTree->partitionData[model].gapVector, 0, localTree->partitionData[model].initialGapVectorSize);
+     
+	  if(localTree->saveMemory)
+	    {
+	      for(j = 1; j <= (size_t)(localTree->mxtips); j++)
+		for(i = 0; i < width; i++)
+		  if(localTree->partitionData[model].yVector[j][i] == undetermined)
+		    localTree->partitionData[model].gapVector[localTree->partitionData[model].gapVectorLength * j + i / 32] |= mask32[i % 32];
+	    }
+	}
+      else
+	{
+	  localTree->partitionData[model].gapVectorLength = 0;
 	}
     }
 }
@@ -5149,7 +5211,10 @@ void allocNodex(tree *tr, int tid, int n)
     memoryRequirements = 0,
     myLength = 0;
 
-  computeFraction(tr, tid, n);
+  if(tr->manyPartitions)
+    computeFractionMany(tr, tid, n);
+  else
+    computeFraction(tr, tid, n);
 
   allocPartitions(tr);
  
@@ -5158,26 +5223,39 @@ void allocNodex(tree *tr, int tid, int n)
   else
     rateHet = 4;
 
-  /* printf("RateHet: %d\n", rateHet);*/
+  
 
   for(model = 0; model < (size_t)tr->NumberOfModels; model++)
     {
-      size_t width = tr->partitionData[model].width;
+      size_t 
+	width = tr->partitionData[model].width;
 
       myLength += width;
 
-      memoryRequirements += (size_t)(tr->discreteRateCategories) * (size_t)(tr->partitionData[model].states) * width;
-
-     		
-      tr->partitionData[model].gapVectorLength = ((int)width / 32) + 1;
+      if(width > 0)
+	{
+	  memoryRequirements += (size_t)(tr->discreteRateCategories) * (size_t)(tr->partitionData[model].states) * width;
       
-      tr->partitionData[model].gapVector = (unsigned int*)calloc(tr->partitionData[model].gapVectorLength * 2 * tr->mxtips, sizeof(unsigned int));	  
+	  tr->partitionData[model].gapVectorLength = ((int)width / 32) + 1;
+     
+	  tr->partitionData[model].gapVector = (unsigned int*)calloc(tr->partitionData[model].gapVectorLength * 2 * tr->mxtips, sizeof(unsigned int));	  
       
-      tr->partitionData[model].initialGapVectorSize = tr->partitionData[model].gapVectorLength * 2 * tr->mxtips * sizeof(int);
+	  tr->partitionData[model].initialGapVectorSize = tr->partitionData[model].gapVectorLength * 2 * tr->mxtips * sizeof(int);
       
-      tr->partitionData[model].gapColumn = (double *)malloc_aligned(((size_t)tr->innerNodes) *								      
-								    ((size_t)(tr->partitionData[model].states)) *
-								    rateHet * sizeof(double));		              
+	  tr->partitionData[model].gapColumn = (double *)malloc_aligned(((size_t)tr->innerNodes) *								      
+									((size_t)(tr->partitionData[model].states)) *
+									rateHet * sizeof(double));		              
+	}
+      else
+	{
+	  tr->partitionData[model].gapVectorLength = 0;
+     
+	  tr->partitionData[model].gapVector = (unsigned int*)NULL; 	  
+      
+	  tr->partitionData[model].initialGapVectorSize = 0;
+      
+	  tr->partitionData[model].gapColumn = (double*)NULL;
+	}
     }
 
   if(tid == 0)
@@ -5185,13 +5263,6 @@ void allocNodex(tree *tr, int tid, int n)
       tr->perSiteLL       = (double *)malloc((size_t)tr->cdta->endsite * sizeof(double));
       assert(tr->perSiteLL != NULL);
     }
-
- 
-
-   
-
-  
-
   
   tr->sumBuffer  = (double *)malloc_aligned(memoryRequirements * sizeof(double));
   assert(tr->sumBuffer != NULL);
@@ -5209,15 +5280,13 @@ void allocNodex(tree *tr, int tid, int n)
 
   tr->perSiteLLPtr     = (double*) malloc(myLength * sizeof(double));
 
- 
-
   tr->wgtPtr           = (int*)    malloc(myLength * sizeof(int));
   assert(tr->wgtPtr != NULL);  
 
-
-
   tr->rateCategoryPtr  = (int*)    malloc(myLength * sizeof(int));
   assert(tr->rateCategoryPtr != NULL);
+
+  
 }
 
 
@@ -5245,16 +5314,25 @@ inline static void sendTraversalInfo(tree *localTree, tree *tr)
 
 static void collectDouble(double *dst, double *src, tree *tr, int n, int tid)
 {
-  int model, i;
-
-  for(model = 0; model < tr->NumberOfModels; model++)
-    {
-      for(i = tr->partitionData[model].lower; i < tr->partitionData[model].upper; i++)
-	{
-	  if(i % n == tid)
-	    dst[i] = src[i];
-	}
-    }
+  int 
+    model,
+    i;
+  if(tr->manyPartitions)
+    for(model = 0; model < tr->NumberOfModels; model++)
+      {
+	if(isThisMyPartition(tr, tid, model, n))	
+	  for(i = tr->partitionData[model].lower; i < tr->partitionData[model].upper; i++)
+	    dst[i] = src[i];       
+      }
+  else
+    for(model = 0; model < tr->NumberOfModels; model++)
+      {
+	for(i = tr->partitionData[model].lower; i < tr->partitionData[model].upper; i++)
+	  {
+	    if(i % n == tid)
+	      dst[i] = src[i];
+	  }
+      }
 }
 
 
@@ -5291,6 +5369,14 @@ static void execFunction(tree *tr, tree *localTree, int tid, int n)
     {      
 
     case THREAD_INIT_PARTITION:
+      localTree->manyPartitions = tr->manyPartitions;
+      if(localTree->manyPartitions && tid > 0)     
+	{
+	  localTree->NumberOfModels = tr->NumberOfModels;
+	  localTree->partitionAssignment = (int*)malloc(sizeof(int) * localTree->NumberOfModels);
+	  memcpy(localTree->partitionAssignment, tr->partitionAssignment, localTree->NumberOfModels * sizeof(int));
+	}
+
       initPartition(tr, localTree, tid);     
       allocNodex(localTree, tid, n);
       threadFixModelIndices(tr, localTree, tid, n);
@@ -5504,17 +5590,31 @@ static void execFunction(tree *tr, tree *localTree, int tid, int n)
 	  memcpy(localTree->cdta->patratStored, tr->cdta->patratStored, localTree->originalCrunchedLength * sizeof(double));	  
 	}     
 
-       for(model = 0; model < localTree->NumberOfModels; model++)
-	 {
-	   int localIndex;
-	   for(i = localTree->partitionData[model].lower, localIndex = 0; i <  localTree->partitionData[model].upper; i++)
-	     if(i % n == tid)
-	       {
-		 localTree->partitionData[model].wgt[localIndex]          = tr->cdta->aliaswgt[i];				 		
+
+      if(localTree->manyPartitions)
+	for(model = 0; model < localTree->NumberOfModels; model++)
+	  {	  
+	    if(isThisMyPartition(localTree, tid, model, n))
+	      {
+		int localIndex;
 		
-		 localIndex++;
-	       }	  
-	 }
+		for(i = localTree->partitionData[model].lower, localIndex = 0; i <  localTree->partitionData[model].upper; i++, localIndex++)	     	       
+		  localTree->partitionData[model].wgt[localIndex]          = tr->cdta->aliaswgt[i];				 					       
+	      }	  
+	  }
+      else
+	for(model = 0; model < localTree->NumberOfModels; model++)
+	  {
+	    int localIndex;
+	    for(i = localTree->partitionData[model].lower, localIndex = 0; i <  localTree->partitionData[model].upper; i++)
+	      if(i % n == tid)
+		{
+		  localTree->partitionData[model].wgt[localIndex]          = tr->cdta->aliaswgt[i];				 		
+		  
+		  localIndex++;
+		}	  
+	  }
+
       break;    
     case THREAD_RATE_CATS:
       sendTraversalInfo(localTree, tr);
@@ -5544,16 +5644,29 @@ static void execFunction(tree *tr, tree *localTree, int tid, int n)
       for(model = 0; model < localTree->NumberOfModels; model++)
 	{
 	  localTree->partitionData[model].numberOfCategories = tr->partitionData[model].numberOfCategories;
-	  
-	  for(localCounter = 0, i = localTree->partitionData[model].lower;  i < localTree->partitionData[model].upper; i++)
+
+	  if(localTree->manyPartitions)
 	    {
-	      if(i % n == tid)
-		{		 
-		  localTree->partitionData[model].rateCategory[localCounter] = tr->cdta->rateCategory[i];
-		  localTree->partitionData[model].wr[localCounter]             = tr->wr[i];
-		  localTree->partitionData[model].wr2[localCounter]            = tr->wr2[i];		 
-		 
-		  localCounter++;
+	      if(isThisMyPartition(localTree, tid, model, n))
+		for(localCounter = 0, i = localTree->partitionData[model].lower;  i < localTree->partitionData[model].upper; i++, localCounter++)
+		  {	     
+		    localTree->partitionData[model].rateCategory[localCounter] = tr->cdta->rateCategory[i];
+		    localTree->partitionData[model].wr[localCounter]             = tr->wr[i];
+		    localTree->partitionData[model].wr2[localCounter]            = tr->wr2[i];		 		 	     
+		  } 
+	    }
+	  else	  
+	    {
+	      for(localCounter = 0, i = localTree->partitionData[model].lower;  i < localTree->partitionData[model].upper; i++)
+		{
+		  if(i % n == tid)
+		    {		 
+		      localTree->partitionData[model].rateCategory[localCounter] = tr->cdta->rateCategory[i];
+		      localTree->partitionData[model].wr[localCounter]             = tr->wr[i];
+		      localTree->partitionData[model].wr2[localCounter]            = tr->wr2[i];		 
+		      
+		      localCounter++;
+		    }
 		}
 	    }
 	}
@@ -5764,6 +5877,103 @@ unsigned int precomputed16_bitcount (unsigned int n)
 }
 
 
+
+#if (defined(_USE_PTHREADS) || (_FINE_GRAIN_MPI))    
+
+static int partCompare(const void *p1, const void *p2)
+{
+ partitionType 
+   *rc1 = (partitionType *)p1,
+   *rc2 = (partitionType *)p2;
+
+ int 
+   i = rc1->partitionLength,
+   j = rc2->partitionLength;
+  
+  if (i > j)
+    return (-1);
+  if (i < j)
+    return (1);
+  return (0);
+}
+
+static void multiprocessorScheduling(tree *tr)
+{
+  size_t   
+    checkSum = 0,
+    sum = 0;
+
+  int    
+    i,
+#ifndef _FINE_GRAIN_MPI
+    n = NumberOfThreads,
+#else
+    n = processes,
+#endif
+    p = tr->NumberOfModels,    
+    *assignments = (int *)calloc(n, sizeof(int));  
+
+  partitionType 
+    *pt = (partitionType *)malloc(sizeof(partitionType) * p);
+
+  tr->partitionAssignment = (int *)malloc(p * sizeof(int));
+
+  for(i = 0; i < p; i++)
+    {
+      pt[i].partitionNumber = i;
+      pt[i].partitionLength = tr->partitionData[i].upper - tr->partitionData[i].lower;
+      sum += (size_t)pt[i].partitionLength;
+    }
+  
+  qsort(pt, p, sizeof(partitionType), partCompare);
+
+  /*for(i = 0; i < p; i++)
+    printf("%d %d\n", pt[i].partitionLength, pt[i].partitionNumber);*/
+
+  for(i = 0; i < p; i++)
+    {
+      int 
+	k, 
+	min = INT_MAX,
+	minIndex = -1;
+
+      for(k = 0; k < n; k++)	
+	if(assignments[k] < min)
+	  {
+	    min = assignments[k];
+	    minIndex = k;
+	  }
+      
+      assert(minIndex >= 0);
+      
+      assignments[minIndex] +=  pt[i].partitionLength;
+      assert(pt[i].partitionNumber >= 0 && pt[i].partitionNumber < p);
+      tr->partitionAssignment[pt[i].partitionNumber] = minIndex;
+    }
+
+  printBothOpen("\nMulti-processor partition data distribution enabled (-Q option)\n");
+  
+  for(i = 0; i < n; i++)
+    {      
+      printBothOpen("Process %d has %d sites\n", i, assignments[i]);
+      checkSum += (size_t)assignments[i];
+    }
+  printBothOpen("\n");
+
+  /*
+    for(i = 0; i < p; i++)
+    printf("%d ", tr->partitionAssignment[i]);
+    printf("\n");
+  */
+  
+  assert(sum == checkSum);
+
+  free(assignments);
+  free(pt);
+}
+
+#endif
+
 int main (int argc, char *argv[])
 {
   rawdata      *rdta;
@@ -5789,16 +5999,6 @@ int main (int argc, char *argv[])
   MPI_Comm_size(MPI_COMM_WORLD, &processes);
   printf("\nThis is RAxML FINE-GRAIN MPI Process Number: %d\n", processID);   
   MPI_Barrier(MPI_COMM_WORLD);
-  
-  
-
-  
-  
- 
-
-
-  
-
 #else
   processID = 0;
 #endif
@@ -5872,7 +6072,12 @@ int main (int argc, char *argv[])
 	  fclose(byteFile);
 	  return 0;
 	}
-      
+
+#if (defined(_USE_PTHREADS) || (_FINE_GRAIN_MPI))
+      if(tr->manyPartitions)
+	multiprocessorScheduling(tr);
+#endif
+
 
 #ifdef _USE_PTHREADS
       startPthreads(tr);
@@ -5889,10 +6094,10 @@ int main (int argc, char *argv[])
 
       printModelAndProgramInfo(tr, adef, argc, argv);
 
-      printBothOpen("Memory Saving Option: %s\n", (tr->saveMemory == TRUE)?"ENABLED":"DISABLED");
-   	          
-      initModel(tr, rdta, cdta, adef);                
-      
+      printBothOpen("Memory Saving Option: %s\n", (tr->saveMemory == TRUE)?"ENABLED":"DISABLED");   	             
+
+      initModel(tr, rdta, cdta, adef);                      
+
       if(tr->searchConvergenceCriterion)
 	{                     
 	  tr->bitVectors = initBitVector(tr, &(tr->vLength));

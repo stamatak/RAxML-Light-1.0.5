@@ -92,9 +92,6 @@
 /*  2**64 (exactly)  */
 /* 4294967296 2**32 */
 
-
-
-
 #define badRear         -1
 
 #define NUM_BRANCHES     1
@@ -707,15 +704,17 @@ typedef  struct  {
   int    *inserts;
   int    branchCounter;
 
+ 
+
 #if (defined(_USE_PTHREADS) || (_FINE_GRAIN_MPI))
   /*
     do we need this stuff ?
   */
   /*unsigned int **bitVectors;
     hashtable *h;*/
- 
+  boolean    manyPartitions;
     
-   
+  int *partitionAssignment;   
 
   double *temporaryVector;
   parsimonyVector *temporaryParsimonyVector;
@@ -967,6 +966,11 @@ typedef  struct  {
 
 /***************************************************************/
 
+typedef struct {
+  int partitionNumber;
+  int partitionLength;
+} partitionType;
+
 typedef struct
 {
   double z[NUM_BRANCHES];
@@ -1112,6 +1116,10 @@ typedef struct
 } partitionLengths;
 
 /****************************** FUNCTIONS ****************************************************/
+
+#if (defined(_USE_PTHREADS) || (_FINE_GRAIN_MPI))
+boolean isThisMyPartition(tree *localTree, int tid, int model, int numberOfThreads);
+#endif
 
 extern void computePlacementBias(tree *tr, analdef *adef);
 
