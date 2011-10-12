@@ -69,6 +69,180 @@ static inline boolean isGap(unsigned int *x, int pos)
   return (x[pos / 32] & mask32[pos % 32]);
 }
 
+
+
+static void coreGTRGAMMAPROT_perSite(siteAAModels *siteProtModel, int* perSiteAA, double *gammaRates, double *sumtable, int upper, int *wrptr,
+				     volatile double *ext_dlnLdlz,  volatile double *ext_d2lnLdlz2, double lz)
+{
+   double  
+     *sum, 
+     diagptable0[80 * (NUM_PROT_MODELS - 2)] __attribute__ ((aligned (BYTE_ALIGNMENT))),
+     diagptable1[80 * (NUM_PROT_MODELS - 2)] __attribute__ ((aligned (BYTE_ALIGNMENT))),
+     diagptable2[80 * (NUM_PROT_MODELS - 2)] __attribute__ ((aligned (BYTE_ALIGNMENT))),
+     *d0,
+     *d1,
+     *d2;
+   int     i, j, l, p;
+   double  dlnLdlz = 0;
+   double d2lnLdlz2 = 0;
+   double ki, kisqr; 
+   double inv_Li, dlnLidlz, d2lnLidlz2;
+
+  for(p = 0; p < (NUM_PROT_MODELS - 2); p++)
+    {
+      double 
+	*d0   = &diagptable0[80 * p],
+	*d1   = &diagptable1[80 * p],
+	*d2   = &diagptable2[80 * p],
+	*EIGN = siteProtModel[p].EIGN;
+      
+      for(i = 0; i < 4; i++)
+	{
+	  ki = gammaRates[i];
+	  kisqr = ki * ki;
+	  
+	  d0[i * 20] = 1.0;
+	  d1[i * 20] = 0.0;
+	  d2[i * 20] = 0.0;
+	  
+	  for(l = 1; l < 20; l++)
+	    {
+	      d0[i * 20 + l] = EXP(EIGN[l-1] * ki * lz);
+	      d1[i * 20 + l] = EIGN[l-1] * ki;
+	      d2[i * 20 + l] = EIGN[l-1] * EIGN[l-1] * kisqr;
+	    }
+	}     
+    }
+
+  for (i = 0; i < upper; i++)
+    {                  
+      __m128d a0 = _mm_setzero_pd();
+      __m128d a1 = _mm_setzero_pd();
+      __m128d a2 = _mm_setzero_pd();
+      
+      d0 = &diagptable0[80 * perSiteAA[i]];
+      d1 = &diagptable1[80 * perSiteAA[i]];
+      d2 = &diagptable2[80 * perSiteAA[i]];
+      sum = &sumtable[i * 80];         
+
+      for(j = 0; j < 4; j++)
+	{	 	  	
+	  double 	   
+	    *_d0 = &d0[j * 20],
+	    *_d1 = &d1[j * 20],
+	    *_d2 = &d2[j * 20];
+  	 	 
+	  for(l = 0; l < 20; l+=2)
+	    {
+	      __m128d tmpv = _mm_mul_pd(_mm_load_pd(&_d0[l]), _mm_load_pd(&sum[j * 20 +l]));
+	      a0 = _mm_add_pd(a0, tmpv);
+	      a1 = _mm_add_pd(a1, _mm_mul_pd(tmpv, _mm_load_pd(&_d1[l])));
+	      a2 = _mm_add_pd(a2, _mm_mul_pd(tmpv, _mm_load_pd(&_d2[l])));
+	    }	 	  
+	}
+
+      a0 = _mm_hadd_pd(a0, a0);
+      a1 = _mm_hadd_pd(a1, a1);
+      a2 = _mm_hadd_pd(a2, a2);
+
+      _mm_storel_pd(&inv_Li, a0);
+      _mm_storel_pd(&dlnLidlz, a1);
+      _mm_storel_pd(&d2lnLidlz2, a2);
+
+      inv_Li = 1.0 / inv_Li;
+
+      dlnLidlz   *= inv_Li;
+      d2lnLidlz2 *= inv_Li;
+
+      dlnLdlz   += wrptr[i] * dlnLidlz;
+      d2lnLdlz2 += wrptr[i] * (d2lnLidlz2 - dlnLidlz * dlnLidlz);
+      
+    }
+
+  *ext_dlnLdlz   = dlnLdlz;
+  *ext_d2lnLdlz2 = d2lnLdlz2;
+}
+
+
+
+static void sumGAMMAPROT_perSite(int *perSiteAA,
+				 siteAAModels *siteProtModel,
+				 int tipCase, double *sumtable, double *x1, double *x2,
+				 unsigned char *tipX1, unsigned char *tipX2, int n)
+{
+  int i, l, k;
+  double *left, *right, *sum;
+
+  
+
+  switch(tipCase)
+    {
+    case TIP_TIP:
+      for(i = 0; i < n; i++)
+	{
+	  double
+	    *tipVector = siteProtModel[perSiteAA[i]].tipVector;
+	  
+	  left  = &(tipVector[20 * tipX1[i]]);
+	  right = &(tipVector[20 * tipX2[i]]);
+
+	  for(l = 0; l < 4; l++)
+	    {
+	      sum = &sumtable[i * 80 + l * 20];
+
+	      for(k = 0; k < 20; k+=2)
+		{
+		  __m128d sumv = _mm_mul_pd(_mm_load_pd(&left[k]), _mm_load_pd(&right[k]));		  
+		  _mm_store_pd(&sum[k], sumv);		 
+		}
+	    }
+	  
+	}
+      break;
+    case TIP_INNER:
+      for(i = 0; i < n; i++)
+	{ 
+	  double
+	    *tipVector = siteProtModel[perSiteAA[i]].tipVector;
+	  
+	  left = &(tipVector[20 * tipX1[i]]);
+
+	  for(l = 0; l < 4; l++)
+	    {
+	      right = &(x2[80 * i + l * 20]);
+	      sum = &sumtable[i * 80 + l * 20];
+
+	      for(k = 0; k < 20; k+=2)
+		{
+		  __m128d sumv = _mm_mul_pd(_mm_load_pd(&left[k]), _mm_load_pd(&right[k]));		  
+		  _mm_store_pd(&sum[k], sumv);		 
+		}
+	    }
+	 
+	}
+      break;
+    case INNER_INNER:     
+      for(i = 0; i < n; i++)
+	{
+	  for(l = 0; l < 4; l++)
+	    {
+	      left  = &(x1[80 * i + l * 20]);
+	      right = &(x2[80 * i + l * 20]);	      
+	      sum   = &(sumtable[i * 80 + l * 20]);
+
+	      for(k = 0; k < 20; k+=2)
+		{
+		  __m128d sumv = _mm_mul_pd(_mm_load_pd(&left[k]), _mm_load_pd(&right[k]));		  
+		  _mm_store_pd(&sum[k], sumv);		 
+		}
+	    }
+	}
+      break;
+    default:
+      assert(0);
+    }
+}
+
 static void sumCAT_SAVE(int tipCase, double *sum, double *x1_start, double *x2_start, double *tipVector,
 			unsigned char *tipX1, unsigned char *tipX2, int n, double *x1_gapColumn, double *x2_gapColumn, unsigned int *x1_gap, unsigned int *x2_gap)
 {
@@ -1191,12 +1365,22 @@ void makenewzIterative(tree *tr)
 		}
 	      else
 		{
-		  if(tr->saveMemory)
-		    sumGAMMAPROT_GAPPED_SAVE(tipCase, tr->partitionData[model].sumBuffer, x1_start, x2_start, tr->partitionData[model].tipVector, tipX1, tipX2,
-					     width, x1_gapColumn, x2_gapColumn, x1_gap, x2_gap);
+		  if(tr->estimatePerSiteAA)
+		    {
+		      sumGAMMAPROT_perSite(tr->partitionData[model].perSiteAAModel,
+					   tr->siteProtModel,
+					   tipCase, tr->partitionData[model].sumBuffer, x1_start, x2_start,
+					   tipX1, tipX2, width);		     		      
+		    }
 		  else
-		    sumGAMMAPROT(tipCase, tr->partitionData[model].sumBuffer, x1_start, x2_start, tr->partitionData[model].tipVector,
-				 tipX1, tipX2, width);
+		    {
+		      if(tr->saveMemory)
+			sumGAMMAPROT_GAPPED_SAVE(tipCase, tr->partitionData[model].sumBuffer, x1_start, x2_start, tr->partitionData[model].tipVector, tipX1, tipX2,
+						 width, x1_gapColumn, x2_gapColumn, x1_gap, x2_gap);
+		      else
+			sumGAMMAPROT(tipCase, tr->partitionData[model].sumBuffer, x1_start, x2_start, tr->partitionData[model].tipVector,
+				     tipX1, tipX2, width);
+		    }
 		}
 	      break;		
 	    default:
@@ -1275,9 +1459,16 @@ void execCore(tree *tr, volatile double *_dlnLdlz, volatile double *_d2lnLdlz2)
 			       &dlnLdlz, &d2lnLdlz2,
 			       sumBuffer);
 	      else
-		coreGTRGAMMAPROT(tr->partitionData[model].gammaRates, tr->partitionData[model].EIGN,
-				 sumBuffer, width, tr->partitionData[model].wgt,
-				 &dlnLdlz, &d2lnLdlz2, lz);
+		{
+		  if(tr->estimatePerSiteAA)					   
+		    coreGTRGAMMAPROT_perSite(tr->siteProtModel, tr->partitionData[model].perSiteAAModel, 
+					     tr->partitionData[model].gammaRates, sumBuffer, width, tr->partitionData[model].wgt,
+					     &dlnLdlz, &d2lnLdlz2, lz);
+		  else
+		    coreGTRGAMMAPROT(tr->partitionData[model].gammaRates, tr->partitionData[model].EIGN,
+				     sumBuffer, width, tr->partitionData[model].wgt,
+				     &dlnLdlz, &d2lnLdlz2, lz);
+		}
 	      break;		   
 	    default:
 	      assert(0);

@@ -2549,7 +2549,12 @@ static void allocPartitions(tree *tr)
       const partitionLengths *pl = getPartitionLengths(&(tr->partitionData[i]));
 
       size_t 
+	k,
 	width = tr->partitionData[i].width;      
+
+      tr->partitionData[i].perSiteAAModel = (int *)malloc(sizeof(int) * width);
+      for(k = 0; k < width; k++)
+	tr->partitionData[i].perSiteAAModel[k] = WAG;
 
       tr->partitionData[i].wr = (double *)malloc(sizeof(double) * width);
       tr->partitionData[i].wr2 = (double *)malloc(sizeof(double) * width);     
@@ -3334,6 +3339,7 @@ static void printREADME(void)
   printf("      [-T numberOfThreads]\n");  
   printf("      [-v]\n"); 
   printf("      [-w outputDirectory] \n"); 
+  printf("      [-X]\n");
   printf("\n");
   printf("      -B      Parse phylip file and conduct pattern compression, then store the output in a \n");
   printf("              binary file called sequenceFileName.binary that can be read via the \"-G\" option\n");
@@ -3443,6 +3449,12 @@ static void printREADME(void)
   printf("      -w      FULL (!) path to the directory into which RAxML shall write its output files\n");
   printf("\n");
   printf("              DEFAULT: current directory\n"); 
+  printf("\n");
+  printf("      -X      EXPERIMENTAL OPTION: This option will do a per-site estimate of protein substitution models\n");
+  printf("              by looping over all given, fixed models LG, WAG, JTT, etc and using their respective base frequencies to independently\n");
+  printf("              assign a prot subst. model to each site via ML optimization\n");
+  printf("              At present this option only works with the GTR+GAMMA model, unpartitioned datasets, and in the sequential\n");
+  printf("              version only.\n");
   printf("\n\n\n\n");
 
 }
@@ -3547,6 +3559,8 @@ static void get_args(int argc, char *argv[], analdef *adef, tree *tr)
   tr->multiStateModel  = GTR_MULTI_STATE;
   tr->useGappedImplementation = FALSE;
   tr->saveMemory = FALSE;
+  tr->estimatePerSiteAA = FALSE;
+
 #if (defined(_USE_PTHREADS) || (_FINE_GRAIN_MPI))
   tr->manyPartitions = FALSE;
 #endif
@@ -3555,14 +3569,17 @@ static void get_args(int argc, char *argv[], analdef *adef, tree *tr)
 
 #if (defined(_USE_PTHREADS) || (_FINE_GRAIN_MPI))
   while(!bad_opt &&
-	((c = mygetopt(argc,argv,"T:P:R:e:c:f:i:m:t:w:s:n:o:q:G:vhMSDBQ", &optind, &optarg))!=-1))
+	((c = mygetopt(argc,argv,"T:P:R:e:c:f:i:m:t:w:s:n:o:q:G:vhMSDBQX", &optind, &optarg))!=-1))
 #else
     while(!bad_opt &&
-	  ((c = mygetopt(argc,argv,"T:P:R:e:c:f:i:m:t:w:s:n:o:q:G:vhMSDB", &optind, &optarg))!=-1))
+	  ((c = mygetopt(argc,argv,"T:P:R:e:c:f:i:m:t:w:s:n:o:q:G:vhMSDBX", &optind, &optarg))!=-1))
 #endif
     {
     switch(c)
       {
+      case 'X':
+	tr->estimatePerSiteAA = TRUE;       
+	break;
 #if (defined(_USE_PTHREADS) || (_FINE_GRAIN_MPI))	
       case 'Q':
 	tr->manyPartitions = TRUE;
@@ -5365,10 +5382,15 @@ static void execFunction(tree *tr, tree *localTree, int tid, int n)
 
   currentJob = threadJob >> 16;
 
+ 
+  
   switch(currentJob)
-    {      
-
+    {            
     case THREAD_INIT_PARTITION:
+     
+      localTree->estimatePerSiteAA = tr->estimatePerSiteAA;
+     
+      
       localTree->manyPartitions = tr->manyPartitions;
       if(localTree->manyPartitions && tid > 0)     
 	{
@@ -5380,6 +5402,9 @@ static void execFunction(tree *tr, tree *localTree, int tid, int n)
       initPartition(tr, localTree, tid);     
       allocNodex(localTree, tid, n);
       threadFixModelIndices(tr, localTree, tid, n);
+
+     
+      
       break;      
     case THREAD_EVALUATE:
       sendTraversalInfo(localTree, tr);
@@ -5614,7 +5639,28 @@ static void execFunction(tree *tr, tree *localTree, int tid, int n)
 		  localIndex++;
 		}	  
 	  }
+      if(localTree->estimatePerSiteAA && tid > 0)   
+	{
+	  int p;
 
+	  for(p = 0; p < NUM_PROT_MODELS - 2; p++)
+	    {
+	      memcpy(localTree->siteProtModel[p].EIGN,        tr->siteProtModel[p].EIGN,        sizeof(double) * 19);
+	      memcpy(localTree->siteProtModel[p].EV,          tr->siteProtModel[p].EV,          sizeof(double) * 400);                
+	      memcpy(localTree->siteProtModel[p].EI,          tr->siteProtModel[p].EI,          sizeof(double) * 380);
+	      memcpy(localTree->siteProtModel[p].substRates,  tr->siteProtModel[p].substRates,  sizeof(double) * 190);        
+	      memcpy(localTree->siteProtModel[p].frequencies, tr->siteProtModel[p].frequencies, sizeof(double) * 20);
+	      memcpy(localTree->siteProtModel[p].tipVector,   tr->siteProtModel[p].tipVector,   sizeof(double) * 460);
+	    }
+
+	  for(model = 0; model < localTree->NumberOfModels; model++)
+	    {
+	      int width = localTree->partitionData[model].width;
+
+	      for(i = 0; i < width; i++)
+		localTree->partitionData[model].perSiteAAModel[i] = WAG;
+	    }	    
+	}
       break;    
     case THREAD_RATE_CATS:
       sendTraversalInfo(localTree, tr);
@@ -5695,6 +5741,68 @@ static void execFunction(tree *tr, tree *localTree, int tid, int n)
 	  for(model = 0; model < localTree->NumberOfModels; model++)
 	    localTree->executeModel[model] = TRUE;
 	}
+      break;
+    case THREAD_OPTIMIZE_PER_SITE_AA:
+      sendTraversalInfo(localTree, tr);      
+      {
+	int
+	  s,
+	  p;
+	
+	double  
+	  *bestScore = (double *)malloc(localTree->originalCrunchedLength * sizeof(double));	  
+	
+	for(s = 0; s < localTree->originalCrunchedLength; s++)	    
+	  bestScore[s] = unlikely;
+	
+	for(p = 0; p < NUM_PROT_MODELS - 2; p++)
+	  {
+	    int 
+	      model;
+	    
+	    for(model = 0; model < localTree->NumberOfModels; model++)
+	      { 
+		boolean 
+		  execute = ((tr->manyPartitions && isThisMyPartition(tr, tid, model, n)) || (!tr->manyPartitions));
+		
+		if(execute)
+		  {
+		    double
+		      lh;
+		    
+		    int
+		      counter = 0,
+		      i,
+		      lower = localTree->partitionData[model].lower,
+		      upper = localTree->partitionData[model].upper;
+		    
+		    memcpy(localTree->partitionData[model].EIGN,        localTree->siteProtModel[p].EIGN,        sizeof(double) * 19);
+		    memcpy(localTree->partitionData[model].EV,          localTree->siteProtModel[p].EV,          sizeof(double) * 400);                
+		    memcpy(localTree->partitionData[model].EI,          localTree->siteProtModel[p].EI,          sizeof(double) * 380);
+		    memcpy(localTree->partitionData[model].substRates,  localTree->siteProtModel[p].substRates,  sizeof(double) * 190);        
+		    memcpy(localTree->partitionData[model].frequencies, localTree->siteProtModel[p].frequencies, sizeof(double) * 20);
+		    memcpy(localTree->partitionData[model].tipVector,   localTree->siteProtModel[p].tipVector,   sizeof(double) * 460);
+		    
+		    for(i = lower, counter = 0; i < upper; i++)
+		      {
+			if(tr->manyPartitions || (i % n == tid))
+			  {
+			    lh = evaluatePartialGeneric(localTree, counter, 0.0, model);
+			    
+			    if(lh > bestScore[i])
+			      {
+				bestScore[i] = lh; 
+				localTree->partitionData[model].perSiteAAModel[counter] = p;			    
+			      }
+			    counter++;
+			  }
+		      }
+		  }	     	           
+	      }
+	  }
+	  
+	free(bestScore);      					
+      }
       break;
     default:
       printf("Job %d\n", currentJob);

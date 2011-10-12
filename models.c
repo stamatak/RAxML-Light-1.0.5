@@ -450,8 +450,7 @@ void putWAG(double *ext_initialRates)
 
 }
 
-static void initProtMat(double f[20], int proteinMatrix, double *ext_initialRates, 
-			boolean userProteinModel, double *externalAAMatrix)
+static void initProtMat(double f[20], int proteinMatrix, double *ext_initialRates, int model, tree *tr)
 { 
   double q[20][20];
   double daa[400], max, temp;
@@ -459,14 +458,7 @@ static void initProtMat(double f[20], int proteinMatrix, double *ext_initialRate
   double *initialRates = ext_initialRates;
   double scaler;
 
-  if(userProteinModel)
-    {          
-      assert(externalAAMatrix);
-      memcpy(daa, externalAAMatrix,         400 * sizeof(double));
-      memcpy(f,   &(externalAAMatrix[400]), 20  * sizeof(double));      
-    }
-  else
-    {
+  {
       switch(proteinMatrix)
 	{
 	case DAYHOFF:
@@ -2895,11 +2887,7 @@ static void initProtMat(double f[20], int proteinMatrix, double *ext_initialRate
 	    f[18]	=	0.0315	;
 	    f[19]	=	0.0632	;
 	  }
-	  break;
-	case GTR:	  
-	  assert(0);
-	case AUTO:
-	  assert(0);
+	  break;     
 	default: 
 	  assert(0);
 	}
@@ -2980,6 +2968,7 @@ static void initProtMat(double f[20], int proteinMatrix, double *ext_initialRate
     }             
 }
 
+          
 static void updateFracChange(tree *tr)
 {   
   if(tr->NumberOfModels == 1)    
@@ -3188,10 +3177,7 @@ static void initGeneric(const int n, const unsigned int *valueVector, int valueV
 			double *frequencies,
 			double *ext_initialRates,
 			double *tipVector,
-			int model, 
-			boolean useFloat,
-			float *EV_FLOAT, 
-			float *tipVector_FLOAT)
+			int model)
 {
   double 
     **r, 
@@ -3416,10 +3402,7 @@ void initReversibleGTR(tree *tr, analdef *adef, int model)
 		 frequencies, 
 		 ext_initialRates,
 		 tipVector, 
-		 model, 
-		 FALSE, 
-		 (float*)NULL, 
-		 (float*)NULL);    
+		 model);    
      break;   
    case AA_DATA:
      if(tr->partitionData[model].protModels != GTR)           
@@ -3429,11 +3412,10 @@ void initReversibleGTR(tree *tr, analdef *adef, int model)
 
 	 
 	 if(tr->partitionData[model].protModels == AUTO)
-	   initProtMat(f, tr->partitionData[model].autoProtModels, ext_initialRates, adef->userProteinModel, 
-		       adef->externalAAMatrix);
+	   initProtMat(f, tr->partitionData[model].autoProtModels, ext_initialRates, model, tr);
 	 else	  
-	   initProtMat(f, tr->partitionData[model].protModels, ext_initialRates, adef->userProteinModel, 
-		       adef->externalAAMatrix); 		   
+	   initProtMat(f, tr->partitionData[model].protModels, ext_initialRates, model, 
+		       tr); 		   
 	 
 	 if(adef->protEmpiricalFreqs && tr->NumberOfModels == 1)
 	   assert(tr->partitionData[model].protFreqs);
@@ -3449,7 +3431,7 @@ void initReversibleGTR(tree *tr, analdef *adef, int model)
      initGeneric(states, bitVectorAA, 23, fracchanges,
 		 ext_EIGN, EV, EI, frequencies, ext_initialRates,
 		 tipVector, 
-		 model, FALSE, (float*)NULL, (float*)NULL);                   
+		 model);                   
      break;  
    default:
      assert(0);
@@ -4045,6 +4027,39 @@ void initModel(tree *tr, rawdata *rdta, cruncheddata *cdta, analdef *adef)
       makeGammaCats(tr->partitionData[model].alpha, tr->partitionData[model].gammaRates, 4);     
     }                   		       
   
+   if(tr->estimatePerSiteAA)
+    {
+      int i;
+      
+      for(i = 0; i < NUM_PROT_MODELS - 2; i++)
+	{
+	  double 
+	    f[20];
+	  int 
+	    l;
+	  
+	  /*printf("Initializing prot model with model-based freqs: %s\n", protModels[i]);*/
+
+	  initProtMat(f, i, tr->siteProtModel[i].substRates, 0, tr);
+	  
+	  for(l = 0; l < 20; l++)		
+	    tr->siteProtModel[i].frequencies[l] = f[l];
+
+	  initGeneric(20, 
+		      bitVectorAA, 
+		      23, 
+		      tr->siteProtModel[i].fracchange,
+		      tr->siteProtModel[i].EIGN, 
+		      tr->siteProtModel[i].EV, 
+		      tr->siteProtModel[i].EI, 
+		      tr->siteProtModel[i].frequencies, 
+		      tr->siteProtModel[i].substRates,
+		      tr->siteProtModel[i].tipVector, 
+		      0); 
+	}
+
+    }
+
   if(tr->NumberOfModels > 1)
     {
       tr->fracchange = 0;

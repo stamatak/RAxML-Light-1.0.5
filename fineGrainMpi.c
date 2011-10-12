@@ -235,6 +235,177 @@ static int sendBufferSizeInt(int numberOfModels)
   return size;
 }
 
+static size_t calcSendBufferSize(tree *tr, int tid, int n)
+{
+  size_t 
+    length = 0;
+
+  int 
+    model;
+
+  for(model = 0; model < tr->NumberOfModels; model++)
+    if(isThisMyPartition(tr, tid, model, n))
+      length += ((size_t)tr->partitionData[model].upper - (size_t)tr->partitionData[model].lower);
+
+  return length;
+
+}
+static void gatherCatsWorker(tree *tr, int tid, int n, jobDescr *job)
+{
+  int 
+    model,   
+    sendBufferSize = calcSendBufferSize(tr, tid, n);
+  
+  double 
+    *patBufSend = (double *)malloc(sendBufferSize * sizeof(double)),
+    *patStoredBufSend =  (double *)malloc(sendBufferSize * sizeof(double)),
+    *lhsBufSend = (double *)malloc(sendBufferSize * sizeof(double));
+
+  size_t
+    offsets = 0;
+ 
+  tr->lower_spacing = job->lower_spacing;
+  tr->upper_spacing = job->upper_spacing;
+	    
+  if(job->length >= TRAVERSAL_LENGTH)	  
+    receiveTraversalDescriptor(job, tr);
+	    
+  tr->td[0].count = job->length;
+
+  optRateCatPthreads(tr, tr->lower_spacing, tr->upper_spacing, tr->lhs, n, tid);
+    
+  for(model = 0, offsets = 0; model < tr->NumberOfModels; model++)
+    {               	
+      size_t
+	start = (size_t)tr->partitionData[model].lower,
+	width = (size_t)tr->partitionData[model].upper - (size_t)tr->partitionData[model].lower;
+      
+      if(isThisMyPartition(tr, tid, model, n))
+	{
+	  memcpy(&patBufSend[offsets],       &tr->cdta->patrat[start],       sizeof(double) * width);
+	  memcpy(&patStoredBufSend[offsets], &tr->cdta->patratStored[start], sizeof(double) * width);
+	  memcpy(&lhsBufSend[offsets],       &tr->lhs[start],                sizeof(double) * width);
+
+	  offsets += width;
+	}		 		
+    }
+   
+ 
+  MPI_Gatherv(patBufSend,       sendBufferSize, MPI_DOUBLE, (double*)NULL, (int*)NULL, (int*)NULL, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+  MPI_Gatherv(patStoredBufSend, sendBufferSize, MPI_DOUBLE, (double*)NULL, (int*)NULL, (int*)NULL, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+  MPI_Gatherv(lhsBufSend,       sendBufferSize, MPI_DOUBLE, (double*)NULL, (int*)NULL, (int*)NULL, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+ 
+  free(patBufSend);
+  free(patStoredBufSend);
+  free(lhsBufSend);
+}
+
+static void gatherCatsMaster(tree *tr, int tid, int n, jobDescr *job)
+{
+  int
+    offsets = 0,
+    *countArray  = (int *)calloc(n, sizeof(int)),
+    *offsetArray = (int *)calloc(n, sizeof(int)),
+    *modelOffsets = (int *)calloc(tr->NumberOfModels, sizeof(int)),
+    localCounter,
+    model,
+    i,
+    p;
+
+  size_t
+    sendBufferSize = calcSendBufferSize(tr, tid, n),
+    recvBufferSize = (size_t)tr->originalCrunchedLength;
+  
+  double    	
+    *patBufSend = (double *)malloc(sendBufferSize * sizeof(double)),
+    *patStoredBufSend =  (double *)malloc(sendBufferSize * sizeof(double)),
+    *lhsBufSend = (double *)malloc(sendBufferSize * sizeof(double)),
+    *patBufRecv = (double *)malloc(recvBufferSize * sizeof(double)),
+    *patStoredBufRecv =  (double *)malloc(recvBufferSize * sizeof(double)),
+    *lhsBufRecv = (double *)malloc(recvBufferSize * sizeof(double));
+
+  for(model = 0; model < tr->NumberOfModels; model++)
+    countArray[tr->partitionAssignment[model]] += (int)(tr->partitionData[model].upper - tr->partitionData[model].lower);
+  
+  for(i = 0, offsets = 0; i < n; i++)
+    {
+      offsetArray[i] = offsets;
+      offsets += countArray[i];
+    }
+  
+  for(p = 0; p < n; p++)    
+    {
+      int
+	localOffset = 0,
+	globalOffset = offsetArray[p];
+
+      for(model = 0; model < tr->NumberOfModels; model++)
+	if(tr->partitionAssignment[model] == p)
+	  {
+	    modelOffsets[model] = globalOffset + localOffset;
+	    localOffset += (tr->partitionData[model].upper - tr->partitionData[model].lower);
+	  }
+    }
+
+
+  assert(offsets == recvBufferSize);
+	
+  
+
+  job->length  = tr->td[0].count;
+  job->lower_spacing = tr->lower_spacing;
+  job->upper_spacing = tr->upper_spacing;
+  sendMergedMessage(job, tr);
+	
+  if(job->length >= TRAVERSAL_LENGTH)
+    sendTraversalDescriptor(job, tr);
+	
+  optRateCatPthreads(tr, tr->lower_spacing, tr->upper_spacing, tr->lhs, n, tid);
+
+  for(model = 0, offsets = 0; model < tr->NumberOfModels; model++)
+    {               	        
+      size_t       
+	start = (size_t)tr->partitionData[model].lower,
+	width = (size_t)tr->partitionData[model].upper - (size_t)tr->partitionData[model].lower;
+	  
+      if(isThisMyPartition(tr, tid, model, n))
+	{
+	  memcpy(&patBufSend[offsets],       &tr->cdta->patrat[start],       sizeof(double) * width);
+	  memcpy(&patStoredBufSend[offsets], &tr->cdta->patratStored[start], sizeof(double) * width);
+	  memcpy(&lhsBufSend[offsets],       &tr->lhs[start],                sizeof(double) * width);
+
+	  offsets += width;
+	}	      
+    }
+ 
+  MPI_Gatherv(patBufSend,       sendBufferSize, MPI_DOUBLE, patBufRecv,       countArray, offsetArray, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+  MPI_Gatherv(patStoredBufSend, sendBufferSize, MPI_DOUBLE, patStoredBufRecv, countArray, offsetArray, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+  MPI_Gatherv(lhsBufSend,       sendBufferSize, MPI_DOUBLE, lhsBufRecv,       countArray, offsetArray, MPI_DOUBLE, 0, MPI_COMM_WORLD);	
+  
+  for(model = 0; model < tr->NumberOfModels; model++)
+    {        
+      size_t
+	start  = (size_t)tr->partitionData[model].lower,
+	width  = (size_t)tr->partitionData[model].upper - (size_t)tr->partitionData[model].lower;            
+
+      memcpy(&tr->cdta->patrat[start],       &patBufRecv[modelOffsets[model]],       sizeof(double) * width);
+      memcpy(&tr->cdta->patratStored[start], &patStoredBufRecv[modelOffsets[model]], sizeof(double) * width);
+      memcpy(&tr->lhs[start],                &lhsBufRecv[modelOffsets[model]],       sizeof(double) * width); 
+    }
+  
+	
+  free(modelOffsets);
+  free(countArray);
+  free(offsetArray);
+
+  free(patBufSend);
+  free(patStoredBufSend);
+  free(lhsBufSend);
+
+  free(patBufRecv);
+  free(patStoredBufRecv);
+  free(lhsBufRecv);
+}
 
 
 void fineGrainWorker(tree *tr)
@@ -260,7 +431,10 @@ void fineGrainWorker(tree *tr)
 
 
   MPI_Bcast(&(tr->NumberOfModels), 1, MPI_INT, 0, MPI_COMM_WORLD);
-  MPI_Bcast(&(tr->manyPartitions), 1, MPI_INT, 0, MPI_COMM_WORLD);
+
+  MPI_Bcast(&(tr->estimatePerSiteAA), 1, MPI_INT, 0, MPI_COMM_WORLD);
+
+  MPI_Bcast(&(tr->manyPartitions), 1, MPI_INT, 0, MPI_COMM_WORLD); 
   if(tr->manyPartitions)
     {
       tr->partitionAssignment = (int *)malloc(tr->NumberOfModels * sizeof(int));
@@ -535,6 +709,31 @@ void fineGrainWorker(tree *tr)
 	  MPI_Bcast(tr->cdta->patrat,       tr->originalCrunchedLength, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 	  MPI_Bcast(tr->cdta->patratStored, tr->originalCrunchedLength, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 	  
+	  if(tr->estimatePerSiteAA)
+	  {
+	    int 
+	      p;
+
+	    for(p = 0; p < NUM_PROT_MODELS - 2; p++)
+	      {		
+		MPI_Bcast(tr->siteProtModel[p].EIGN,        19,  MPI_DOUBLE, 0, MPI_COMM_WORLD);
+		MPI_Bcast(tr->siteProtModel[p].EV,          400, MPI_DOUBLE, 0, MPI_COMM_WORLD);                
+		MPI_Bcast(tr->siteProtModel[p].EI,          380, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+		MPI_Bcast(tr->siteProtModel[p].substRates,  190, MPI_DOUBLE, 0, MPI_COMM_WORLD);        
+		MPI_Bcast(tr->siteProtModel[p].frequencies, 20,  MPI_DOUBLE, 0, MPI_COMM_WORLD);
+		MPI_Bcast(tr->siteProtModel[p].tipVector,   460, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+	      }
+	    
+	    for(model = 0; model < tr->NumberOfModels; model++)
+	      {
+		int 
+		  width = tr->partitionData[model].width;
+		
+		for(i = 0; i < width; i++)
+		  tr->partitionData[model].perSiteAAModel[i] = WAG;
+	      }	    	    
+	  }
+
 	  MPI_Barrier(MPI_COMM_WORLD);  
 	  break;
 	case THREAD_NEWVIEW:     	    
@@ -749,75 +948,52 @@ void fineGrainWorker(tree *tr)
 	  }
 	  break;
 	case THREAD_RATE_CATS:
-	  { 
-	    int 
-	      model,
-	      i,
-	      localCounter,
-	      sendBufferSize;
-	    
-	    double 
-	      *localDummy = (double*)NULL,
-	      *patBufSend,
-	      *patStoredBufSend,
-	      *lhsBufSend;
-	   
-	    if(tr->manyPartitions)
-	      sendBufferSize = tr->originalCrunchedLength;
-	    else
-	      sendBufferSize = (tr->originalCrunchedLength / n) + 1;
-
-	    patBufSend = (double *)malloc(sendBufferSize * sizeof(double));
-	    patStoredBufSend =  (double *)malloc(sendBufferSize * sizeof(double));
-	    lhsBufSend = (double *)malloc(sendBufferSize * sizeof(double));
- 
-	    tr->lower_spacing = job.lower_spacing;
-	    tr->upper_spacing = job.upper_spacing;
-	    
-	    if(job.length >= TRAVERSAL_LENGTH)	  
-	      receiveTraversalDescriptor(&job, tr);
-	    
-	    tr->td[0].count = job.length;
-
-	    optRateCatPthreads(tr, tr->lower_spacing, tr->upper_spacing, tr->lhs, n, tid);
-    
-	    for(model = 0, localCounter = 0; model < tr->NumberOfModels; model++)
-	      {               
-	
-		if(tr->manyPartitions)
-		  {
-		    size_t
-		      start = (size_t)tr->partitionData[model].lower,
-		      width = (size_t)tr->partitionData[model].upper - (size_t)tr->partitionData[model].lower;
-		    
-		    if(isThisMyPartition(tr, tid, model, n))
-		      {
-			memcpy(&patBufSend[start],       &tr->cdta->patrat[start],       sizeof(double) * width);
-			memcpy(&patStoredBufSend[start], &tr->cdta->patratStored[start], sizeof(double) * width);
-			memcpy(&lhsBufSend[start],       &tr->lhs[start],                sizeof(double) * width);
-		      }		 
-		  }
-		else
-		  {
-		    for(i = tr->partitionData[model].lower;  i < tr->partitionData[model].upper; i++)
+	  if(tr->manyPartitions)
+	    gatherCatsWorker(tr, tid, n, &job);
+	  else
+	    { 
+	      int 
+		model,
+		i,
+		localCounter,
+		sendBufferSize = (tr->originalCrunchedLength / n) + 1;;
+	      
+	      double 
+		*localDummy = (double*)NULL,	      
+		*patBufSend = (double *)malloc(sendBufferSize * sizeof(double)),
+		*patStoredBufSend =  (double *)malloc(sendBufferSize * sizeof(double)),
+		*lhsBufSend = (double *)malloc(sendBufferSize * sizeof(double));
+	      
+	      tr->lower_spacing = job.lower_spacing;
+	      tr->upper_spacing = job.upper_spacing;
+	      
+	      if(job.length >= TRAVERSAL_LENGTH)	  
+		receiveTraversalDescriptor(&job, tr);
+	      
+	      tr->td[0].count = job.length;
+	      
+	      optRateCatPthreads(tr, tr->lower_spacing, tr->upper_spacing, tr->lhs, n, tid);
+	      
+	      for(model = 0, localCounter = 0; model < tr->NumberOfModels; model++)
+		{               		  		  
+		  for(i = tr->partitionData[model].lower;  i < tr->partitionData[model].upper; i++)
 		      if(i % n == tid)
 			{
 			  patBufSend[localCounter] = tr->cdta->patrat[i];
 			  patStoredBufSend[localCounter] = tr->cdta->patratStored[i];
 			  lhsBufSend[localCounter] = tr->lhs[i];
 			  localCounter++;
-			}
-		  }
-	      }
+			}		  
+		}
    
-	    MPI_Gather(patBufSend,       sendBufferSize, MPI_DOUBLE, localDummy, sendBufferSize, MPI_DOUBLE, 0, MPI_COMM_WORLD);
-	    MPI_Gather(patStoredBufSend, sendBufferSize, MPI_DOUBLE, localDummy, sendBufferSize, MPI_DOUBLE, 0, MPI_COMM_WORLD);
-	    MPI_Gather(lhsBufSend,       sendBufferSize, MPI_DOUBLE, localDummy, sendBufferSize, MPI_DOUBLE, 0, MPI_COMM_WORLD);
-	    
-	    free(patBufSend);
-	    free(patStoredBufSend);
-	    free(lhsBufSend);
-	  }
+	      MPI_Gather(patBufSend,       sendBufferSize, MPI_DOUBLE, localDummy, sendBufferSize, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+	      MPI_Gather(patStoredBufSend, sendBufferSize, MPI_DOUBLE, localDummy, sendBufferSize, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+	      MPI_Gather(lhsBufSend,       sendBufferSize, MPI_DOUBLE, localDummy, sendBufferSize, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+	      
+	      free(patBufSend);
+	      free(patStoredBufSend);
+	      free(lhsBufSend);
+	    }
 	  break;
 	case THREAD_NEWVIEW_MASKED:
 	  {
@@ -892,6 +1068,73 @@ void fineGrainWorker(tree *tr)
 	    free(buffer);
 	  }
 	  break;
+	case THREAD_OPTIMIZE_PER_SITE_AA:      
+
+	  tr->td[0].count = job.length;
+	  
+	  if(job.length >= TRAVERSAL_LENGTH)
+	    receiveTraversalDescriptor(&job, tr);
+
+	  {
+	    int
+	      s,
+	      p;
+	    
+	    double  
+	      *bestScore = (double *)malloc(tr->originalCrunchedLength * sizeof(double));	  
+	    
+	    for(s = 0; s < tr->originalCrunchedLength; s++)	    
+	      bestScore[s] = unlikely;
+	    
+	    for(p = 0; p < NUM_PROT_MODELS - 2; p++)
+	      {
+		int 
+		  model;
+		
+		for(model = 0; model < tr->NumberOfModels; model++)
+		  { 
+		    boolean 
+		      execute = ((tr->manyPartitions && isThisMyPartition(tr, tid, model, n)) || (!tr->manyPartitions));
+		    
+		    if(execute)
+		      {
+			double
+			  lh;
+			
+			int
+			  counter = 0,
+			  i,
+			  lower = tr->partitionData[model].lower,
+			  upper = tr->partitionData[model].upper;
+			
+			memcpy(tr->partitionData[model].EIGN,        tr->siteProtModel[p].EIGN,        sizeof(double) * 19);
+			memcpy(tr->partitionData[model].EV,          tr->siteProtModel[p].EV,          sizeof(double) * 400);                
+			memcpy(tr->partitionData[model].EI,          tr->siteProtModel[p].EI,          sizeof(double) * 380);
+			memcpy(tr->partitionData[model].substRates,  tr->siteProtModel[p].substRates,  sizeof(double) * 190);        
+			memcpy(tr->partitionData[model].frequencies, tr->siteProtModel[p].frequencies, sizeof(double) * 20);
+			memcpy(tr->partitionData[model].tipVector,   tr->siteProtModel[p].tipVector,   sizeof(double) * 460);
+			   
+			for(i = lower, counter = 0; i < upper; i++)
+			  {
+			    if(tr->manyPartitions || (i % n == tid))
+			      {
+				lh = evaluatePartialGeneric(tr, counter, 0.0, model);
+				
+				if(lh > bestScore[i])
+				  {
+				    bestScore[i] = lh; 
+				    tr->partitionData[model].perSiteAAModel[counter] = p;			    
+				  }
+				counter++;
+			      }
+			  }
+		      }	     	           
+		  }
+	      }
+	    
+	    free(bestScore);      		
+	  }
+	  break;
 	case EXIT_GRACEFULLY:
 	  goto endIT;
 	default:
@@ -917,6 +1160,9 @@ void startFineGrainMpi(tree *tr, analdef *adef)
     NumberOfThreads = processes;     
   
   MPI_Bcast(&(tr->NumberOfModels), 1, MPI_INT, 0, MPI_COMM_WORLD);  
+
+  MPI_Bcast(&(tr->estimatePerSiteAA), 1, MPI_INT, 0, MPI_COMM_WORLD);
+
   MPI_Bcast(&(tr->manyPartitions), 1, MPI_INT, 0, MPI_COMM_WORLD);
   if(tr->manyPartitions)
     MPI_Bcast(tr->partitionAssignment, tr->NumberOfModels, MPI_INT, 0, MPI_COMM_WORLD);
@@ -1165,10 +1411,7 @@ void masterBarrierMPI(int jobType, tree *tr)
       {       
 	job.length = 0;
 	sendMergedMessage(&job, tr);
-	      
-       
-
-	
+	            	
 	for(model = 0; model < tr->NumberOfModels; model++)
 	  {
 	    const partitionLengths 
@@ -1193,8 +1436,33 @@ void masterBarrierMPI(int jobType, tree *tr)
 	
 	MPI_Bcast(tr->cdta->patrat,       tr->originalCrunchedLength, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 	MPI_Bcast(tr->cdta->patratStored, tr->originalCrunchedLength, MPI_DOUBLE, 0, MPI_COMM_WORLD);       
+       
+	if(tr->estimatePerSiteAA)
+	  {
+	    int 
+	      p;
 
-	MPI_Barrier(MPI_COMM_WORLD);  	
+	    for(p = 0; p < NUM_PROT_MODELS - 2; p++)
+	      {		
+		MPI_Bcast(tr->siteProtModel[p].EIGN,        19,  MPI_DOUBLE, 0, MPI_COMM_WORLD);
+		MPI_Bcast(tr->siteProtModel[p].EV,          400, MPI_DOUBLE, 0, MPI_COMM_WORLD);                
+		MPI_Bcast(tr->siteProtModel[p].EI,          380, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+		MPI_Bcast(tr->siteProtModel[p].substRates,  190, MPI_DOUBLE, 0, MPI_COMM_WORLD);        
+		MPI_Bcast(tr->siteProtModel[p].frequencies, 20,  MPI_DOUBLE, 0, MPI_COMM_WORLD);
+		MPI_Bcast(tr->siteProtModel[p].tipVector,   460, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+	      }
+	    
+	    for(model = 0; model < tr->NumberOfModels; model++)
+	      {
+		int 
+		  width = tr->partitionData[model].width;
+		
+		for(i = 0; i < width; i++)
+		  tr->partitionData[model].perSiteAAModel[i] = WAG;
+	      }	    	    
+	  }
+
+	MPI_Barrier(MPI_COMM_WORLD);  
       }
       break;
     case THREAD_NEWVIEW:      
@@ -1421,117 +1689,71 @@ void masterBarrierMPI(int jobType, tree *tr)
       }
       break;      
     case THREAD_RATE_CATS:
-      {
-	int
-	  localCounter,
-	  model,
-	  i,
-	  sendBufferSize,
-	  recvBufferSize;
-
-	double 
-	  *patBufSend,
-	  *patStoredBufSend,
-	  *lhsBufSend,
-	  *patBufRecv,
-	  *patStoredBufRecv,
-	  *lhsBufRecv;
-     
-	if(tr->manyPartitions)
-	  sendBufferSize = tr->originalCrunchedLength;
-	else
-	  sendBufferSize = (tr->originalCrunchedLength / n) + 1;
-
-	recvBufferSize = sendBufferSize * n;
-	
-	patBufSend = (double *)malloc(sendBufferSize * sizeof(double));
-	patStoredBufSend =  (double *)malloc(sendBufferSize * sizeof(double));
-	lhsBufSend = (double *)malloc(sendBufferSize * sizeof(double));
-	patBufRecv = (double *)malloc(recvBufferSize * sizeof(double));
-	patStoredBufRecv =  (double *)malloc(recvBufferSize * sizeof(double));
-	lhsBufRecv = (double *)malloc(recvBufferSize * sizeof(double));
-	
-
-	job.length  = tr->td[0].count;
-	job.lower_spacing = tr->lower_spacing;
-	job.upper_spacing = tr->upper_spacing;
-	sendMergedMessage(&job, tr);
-	
-	if(job.length >= TRAVERSAL_LENGTH)
-	  sendTraversalDescriptor(&job, tr);
-	
-	optRateCatPthreads(tr, tr->lower_spacing, tr->upper_spacing, tr->lhs, n, tid);
-
-	for(model = 0, localCounter = 0; model < tr->NumberOfModels; model++)
-	   {               
-	    
-	     if(tr->manyPartitions)
-	       {
-		 size_t
-		   start = (size_t)tr->partitionData[model].lower,
-		   width = (size_t)tr->partitionData[model].upper - (size_t)tr->partitionData[model].lower;
-		 
-		 if(isThisMyPartition(tr, tid, model, n))
-		   {
-		     memcpy(&patBufSend[start],       &tr->cdta->patrat[start],       sizeof(double) * width);
-		     memcpy(&patStoredBufSend[start], &tr->cdta->patratStored[start], sizeof(double) * width);
-		     memcpy(&lhsBufSend[start],       &tr->lhs[start],                sizeof(double) * width);
-		   }	
-	       }
-	     else
-	       {
-		 for(i = tr->partitionData[model].lower;  i < tr->partitionData[model].upper; i++)
-		   if(i % n == tid)
-		     {
-		       patBufSend[localCounter] = tr->cdta->patrat[i];
-		       patStoredBufSend[localCounter] = tr->cdta->patratStored[i];
-		       lhsBufSend[localCounter] = tr->lhs[i];
-		       localCounter++;
-		     }
-	       }
+      if(tr->manyPartitions)
+	gatherCatsMaster(tr, tid, n, &job);
+      else
+	{
+	  int
+	    localCounter,
+	    model,
+	    i,
+	    sendBufferSize = (tr->originalCrunchedLength / n) + 1,
+	    recvBufferSize = sendBufferSize * n;
+	  
+	  double 	  	
+	    *patBufSend = (double *)malloc(sendBufferSize * sizeof(double)),
+	    *patStoredBufSend =  (double *)malloc(sendBufferSize * sizeof(double)),
+	    *lhsBufSend = (double *)malloc(sendBufferSize * sizeof(double)),
+	    *patBufRecv = (double *)malloc(recvBufferSize * sizeof(double)),
+	    *patStoredBufRecv =  (double *)malloc(recvBufferSize * sizeof(double)),
+	    *lhsBufRecv = (double *)malloc(recvBufferSize * sizeof(double));
+	  
+	  job.length  = tr->td[0].count;
+	  job.lower_spacing = tr->lower_spacing;
+	  job.upper_spacing = tr->upper_spacing;
+	  sendMergedMessage(&job, tr);
+	  
+	  if(job.length >= TRAVERSAL_LENGTH)
+	    sendTraversalDescriptor(&job, tr);
+	  
+	  optRateCatPthreads(tr, tr->lower_spacing, tr->upper_spacing, tr->lhs, n, tid);
+	  
+	  for(model = 0, localCounter = 0; model < tr->NumberOfModels; model++)
+	    {               	      	     
+	      for(i = tr->partitionData[model].lower;  i < tr->partitionData[model].upper; i++)
+		if(i % n == tid)
+		  {
+		    patBufSend[localCounter] = tr->cdta->patrat[i];
+		    patStoredBufSend[localCounter] = tr->cdta->patratStored[i];
+		    lhsBufSend[localCounter] = tr->lhs[i];
+		    localCounter++;
+		  }	    
+	    }
+	  
+	  MPI_Gather(patBufSend,       sendBufferSize, MPI_DOUBLE, patBufRecv,       sendBufferSize, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+	  MPI_Gather(patStoredBufSend, sendBufferSize, MPI_DOUBLE, patStoredBufRecv, sendBufferSize, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+	  MPI_Gather(lhsBufSend,       sendBufferSize, MPI_DOUBLE, lhsBufRecv,       sendBufferSize, MPI_DOUBLE, 0, MPI_COMM_WORLD);	
+	  
+	  for(model = 0; model < tr->NumberOfModels; model++)
+	    {   	      
+	      for(i = tr->partitionData[model].lower;  i < tr->partitionData[model].upper; i++)
+		{
+		  int 
+		    offset = i % n,
+		    position = i / n;
+		  
+		  tr->cdta->patrat[i]       = patBufRecv[offset * sendBufferSize + position];
+		  tr->cdta->patratStored[i] = patStoredBufRecv[offset * sendBufferSize + position];
+		  tr->lhs[i]                = lhsBufRecv[offset * sendBufferSize + position];		     
+		}	   	   
 	   }
-   
-	MPI_Gather(patBufSend,       sendBufferSize, MPI_DOUBLE, patBufRecv,       sendBufferSize, MPI_DOUBLE, 0, MPI_COMM_WORLD);
-	MPI_Gather(patStoredBufSend, sendBufferSize, MPI_DOUBLE, patStoredBufRecv, sendBufferSize, MPI_DOUBLE, 0, MPI_COMM_WORLD);
-	MPI_Gather(lhsBufSend,       sendBufferSize, MPI_DOUBLE, lhsBufRecv,       sendBufferSize, MPI_DOUBLE, 0, MPI_COMM_WORLD);	
-
-	for(model = 0; model < tr->NumberOfModels; model++)
-	   {   
-	     if(tr->manyPartitions)
-	       {
-		 size_t
-		   offset = (size_t)tr->partitionAssignment[model],
-		   start  = (size_t)tr->partitionData[model].lower,
-		   width  = (size_t)tr->partitionData[model].upper - (size_t)tr->partitionData[model].lower;
-		 
-		 memcpy(&tr->cdta->patrat[start],       &patBufRecv[offset * sendBufferSize + start],       sizeof(double) * width);
-		 memcpy(&tr->cdta->patratStored[start], &patStoredBufRecv[offset * sendBufferSize + start], sizeof(double) * width);
-		 memcpy(&tr->lhs[start],                &lhsBufRecv[offset * sendBufferSize + start],       sizeof(double) * width);
-	       }
-	     else
-	       {
-		 for(i = tr->partitionData[model].lower;  i < tr->partitionData[model].upper; i++)
-		   {
-		     int 
-		       offset = i % n,
-		       position = i / n;
-		     
-		     tr->cdta->patrat[i]       = patBufRecv[offset * sendBufferSize + position];
-		     tr->cdta->patratStored[i] = patStoredBufRecv[offset * sendBufferSize + position];
-		     tr->lhs[i]                = lhsBufRecv[offset * sendBufferSize + position];		     
-		   }	   
-	       }
-	   }
-	
-	
-
+      
 	free(patBufSend);
 	free(patStoredBufSend);
 	free(lhsBufSend);
 	free(patBufRecv);
 	free(patStoredBufRecv);
 	free(lhsBufRecv);
-
       }
       break;	
     case THREAD_NEWVIEW_MASKED:
@@ -1605,6 +1827,73 @@ void masterBarrierMPI(int jobType, tree *tr)
 	MPI_Bcast(buffer, length, MPI_DOUBLE, 0, MPI_COMM_WORLD);	
 	
 	free(buffer);  
+      }
+      break;
+    case THREAD_OPTIMIZE_PER_SITE_AA:
+      job.length = tr->td[0].count;       	
+      sendMergedMessage(&job, tr);
+	
+
+      if(job.length >= TRAVERSAL_LENGTH)	
+	sendTraversalDescriptor(&job, tr);
+      {
+	int
+	  s,
+	  p;
+	
+	double  
+	  *bestScore = (double *)malloc(tr->originalCrunchedLength * sizeof(double));	  
+	
+	for(s = 0; s < tr->originalCrunchedLength; s++)	    
+	  bestScore[s] = unlikely;
+	
+	for(p = 0; p < NUM_PROT_MODELS - 2; p++)
+	  {
+	    int 
+	      model;
+	    
+	    for(model = 0; model < tr->NumberOfModels; model++)
+	      { 
+		boolean 
+		  execute = ((tr->manyPartitions && isThisMyPartition(tr, tid, model, n)) || (!tr->manyPartitions));
+		
+		if(execute)
+		  {
+		    double
+		      lh;
+		    
+		    int
+		      counter = 0,
+		      i,
+		      lower = tr->partitionData[model].lower,
+		      upper = tr->partitionData[model].upper;
+		    
+		    memcpy(tr->partitionData[model].EIGN,        tr->siteProtModel[p].EIGN,        sizeof(double) * 19);
+		    memcpy(tr->partitionData[model].EV,          tr->siteProtModel[p].EV,          sizeof(double) * 400);                
+		    memcpy(tr->partitionData[model].EI,          tr->siteProtModel[p].EI,          sizeof(double) * 380);
+		    memcpy(tr->partitionData[model].substRates,  tr->siteProtModel[p].substRates,  sizeof(double) * 190);        
+		    memcpy(tr->partitionData[model].frequencies, tr->siteProtModel[p].frequencies, sizeof(double) * 20);
+		    memcpy(tr->partitionData[model].tipVector,   tr->siteProtModel[p].tipVector,   sizeof(double) * 460);
+		    
+		    for(i = lower, counter = 0; i < upper; i++)
+		      {
+			if(tr->manyPartitions || (i % n == tid))
+			  {
+			    lh = evaluatePartialGeneric(tr, counter, 0.0, model);
+			    
+			    if(lh > bestScore[i])
+			      {
+				bestScore[i] = lh; 
+				tr->partitionData[model].perSiteAAModel[counter] = p;			    
+			      }
+			    counter++;
+			  }
+		      }
+		  }	     	           
+	      }
+	  }
+	  
+	free(bestScore);      		
       }
       break;
     case EXIT_GRACEFULLY:     

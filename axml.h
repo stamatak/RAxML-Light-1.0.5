@@ -94,7 +94,7 @@
 
 #define badRear         -1
 
-#define NUM_BRANCHES     1
+#define NUM_BRANCHES     2
 
 #define TRUE             1
 #define FALSE            0
@@ -604,6 +604,7 @@ typedef struct {
 
   unsigned int    *globalScaler;
   double          *globalScalerDouble;
+  int    *perSiteAAModel;
   int    *wgt;
  
   int    *rateCategory;
@@ -693,10 +694,26 @@ typedef struct {
 } checkPointState;
 
 
+typedef struct {
+  double EIGN[19] __attribute__ ((aligned (BYTE_ALIGNMENT)));             
+  double EV[400] __attribute__ ((aligned (BYTE_ALIGNMENT)));                
+  double EI[380] __attribute__ ((aligned (BYTE_ALIGNMENT)));
+  double substRates[190];        
+  double frequencies[20] ;      
+  double tipVector[460] __attribute__ ((aligned (BYTE_ALIGNMENT)));
+  double fracchange[1];
+  double left[1600] __attribute__ ((aligned (BYTE_ALIGNMENT)));
+  double right[1600] __attribute__ ((aligned (BYTE_ALIGNMENT)));
+} siteAAModels;
+
 typedef  struct  {
   boolean useGappedImplementation;
   boolean saveMemory;
   
+  siteAAModels siteProtModel[2 * (NUM_PROT_MODELS - 2)];
+
+  boolean estimatePerSiteAA;
+
   int    *resample;
 
   int numberOfBranches;
@@ -1468,6 +1485,7 @@ extern void testInsertThoroughIterative(tree *tr, int branchNumber, boolean boot
 #define THREAD_PREPARE_BIPS_FOR_PRINT       39
 #define THREAD_MRE_COMPUTE                  40
 #define THREAD_BROADCAST_RATE               41
+#define THREAD_OPTIMIZE_PER_SITE_AA         42
 
 /*
 
@@ -1526,7 +1544,8 @@ void allocNodex(tree *tr, int tid, int n);
 #define THREAD_NEWVIEW_MASKED  10
 #define THREAD_OPT_ALPHA       11
 #define THREAD_COPY_ALPHA      12
-#define EXIT_GRACEFULLY        13
+#define THREAD_OPTIMIZE_PER_SITE_AA 13
+#define EXIT_GRACEFULLY        14
 
 
 

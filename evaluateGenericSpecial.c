@@ -55,37 +55,6 @@ extern const unsigned int mask32[32];
 
 
 
-static void calcDiagptableFlex(double z, int numberOfCategories, double *rptr, double *EIGN, double *diagptable, const int numStates)
-{
-  int 
-    i, 
-    l;
-  
-  double 
-    lz, 
-    lza[64];
-  
-  const int 
-    rates = numStates - 1;
-  
-  assert(numStates <= 64);
-  
-  if (z < zmin) 
-    lz = log(zmin);
-  else
-    lz = log(z);
-
-  for(l = 0; l < rates; l++)      
-    lza[l] = EIGN[l] * lz; 
-
-  for(i = 0; i <  numberOfCategories; i++)
-    {	      	       
-      diagptable[i * numStates] = 1.0;
-
-      for(l = 1; l < numStates; l++)
-	diagptable[i * numStates + l] = EXP(rptr[i] * lza[l - 1]);     	          
-    }        
-}
 
 
 void calcDiagptable(double z, int data, int numberOfCategories, double *rptr, double *EIGN, double *diagptable)
@@ -135,6 +104,86 @@ void calcDiagptable(double z, int data, int numberOfCategories, double *rptr, do
     default:
       assert(0);
     }
+}
+
+
+
+static double evaluateGTRGAMMAPROT_perSite (int *ex1, int *ex2, int *wptr,
+					    double *x1, double *x2,  					   
+					    unsigned char *tipX1, int n, 
+					    int *perSiteAA,
+					    siteAAModels *siteProtModel)
+{
+  double   
+    sum = 0.0, term;        
+  int     i, j, l;   
+  double  *left, *right;              
+  
+  if(tipX1)
+    {               
+      for (i = 0; i < n; i++) 
+	{
+	  double 
+	    *tipVector  = siteProtModel[perSiteAA[i]].tipVector,
+	    *diagptable = siteProtModel[perSiteAA[i]].left;
+
+	  __m128d tv = _mm_setzero_pd();
+	  left = &(tipVector[20 * tipX1[i]]);	  	  
+	  
+	  for(j = 0, term = 0.0; j < 4; j++)
+	    {
+	      double 
+		*d = &diagptable[j * 20];
+	      
+	      right = &(x2[80 * i + 20 * j]);
+	      
+	      for(l = 0; l < 20; l+=2)
+		{
+		  __m128d mul = _mm_mul_pd(_mm_load_pd(&left[l]), _mm_load_pd(&right[l]));
+		  tv = _mm_add_pd(tv, _mm_mul_pd(mul, _mm_load_pd(&d[l])));		   
+		}		 		
+	    }
+	  tv = _mm_hadd_pd(tv, tv);
+	  _mm_storel_pd(&term, tv);
+	  
+	  term = LOG(0.25 * term);
+	 	   	  
+	  sum += wptr[i] * term;
+	}    	        
+    }              
+  else
+    {
+      for (i = 0; i < n; i++) 
+	{
+	  double 	   
+	    *diagptable = siteProtModel[perSiteAA[i]].left;	  	 	             
+	  
+	  __m128d tv = _mm_setzero_pd();	 	  	  
+	      
+	  for(j = 0, term = 0.0; j < 4; j++)
+	    {
+	      double 
+		*d = &diagptable[j * 20];
+	      
+	      left  = &(x1[80 * i + 20 * j]);
+	      right = &(x2[80 * i + 20 * j]);
+	      
+	      for(l = 0; l < 20; l+=2)
+		{
+		  __m128d mul = _mm_mul_pd(_mm_load_pd(&left[l]), _mm_load_pd(&right[l]));
+		  tv = _mm_add_pd(tv, _mm_mul_pd(mul, _mm_load_pd(&d[l])));		   
+		}		 		
+	    }
+	  tv = _mm_hadd_pd(tv, tv);
+	  _mm_storel_pd(&term, tv);	  
+	  	 
+	  term = LOG(0.25 * term);
+	  	  
+	  sum += wptr[i] * term;
+	}
+    }
+       
+  return  sum;
 }
 
 
@@ -1141,19 +1190,41 @@ double evaluateIterative(tree *tr,  boolean writeVector)
 		}
 	      else
 		{
-		  calcDiagptable(z, AA_DATA, 4, tr->partitionData[model].gammaRates, tr->partitionData[model].EIGN, diagptable);
-
-		  if(tr->saveMemory)
-		    partitionLikelihood = evaluateGTRGAMMAPROT_GAPPED_SAVE(ex1, ex2, tr->partitionData[model].wgt,
-									   x1_start, x2_start, tr->partitionData[model].tipVector,
-									   tip, width, diagptable, TRUE,
-									   x1_gapColumn, x2_gapColumn, x1_gap, x2_gap);
-
+		  if(tr->estimatePerSiteAA)
+		    { 
+		      int 
+			p;
+		      
+		      for(p = 0; p < (NUM_PROT_MODELS - 2); p++)			    
+			calcDiagptable(z, AA_DATA, 4, tr->partitionData[model].gammaRates, tr->siteProtModel[p].EIGN, tr->siteProtModel[p].left);
+		      
+		      partitionLikelihood = evaluateGTRGAMMAPROT_perSite(ex1, 
+									 ex2,
+									  tr->partitionData[model].wgt,
+									 x1_start, 
+									 x2_start,
+									 tip,
+									 width, 
+									 tr->partitionData[model].perSiteAAModel,
+									 tr->siteProtModel);					   
+		      
+		    }
 		  else
-		    partitionLikelihood = evaluateGTRGAMMAPROT(ex1, ex2, tr->partitionData[model].wgt,
-							       x1_start, x2_start, tr->partitionData[model].tipVector,
-							       tip, width, diagptable, TRUE);
-		}	      
+		    {
+		      calcDiagptable(z, AA_DATA, 4, tr->partitionData[model].gammaRates, tr->partitionData[model].EIGN, diagptable);
+		      
+		      if(tr->saveMemory)
+			partitionLikelihood = evaluateGTRGAMMAPROT_GAPPED_SAVE(ex1, ex2, tr->partitionData[model].wgt,
+									       x1_start, x2_start, tr->partitionData[model].tipVector,
+									       tip, width, diagptable, TRUE,
+									       x1_gapColumn, x2_gapColumn, x1_gap, x2_gap);
+		      
+		      else
+			partitionLikelihood = evaluateGTRGAMMAPROT(ex1, ex2, tr->partitionData[model].wgt,
+								   x1_start, x2_start, tr->partitionData[model].tipVector,
+								   tip, width, diagptable, TRUE);
+		    }	      
+		}
 	      break;	      		    
 	    default:
 	      assert(0);	    

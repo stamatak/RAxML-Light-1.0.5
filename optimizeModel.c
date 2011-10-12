@@ -2313,6 +2313,69 @@ static void autoProtein(tree *tr, analdef *adef)
 }
 
 
+static void calcPerSiteProteinModels(tree *tr)
+{
+    
+  determineFullTraversal(tr->start, tr);
+#ifdef _USE_PTHREADS
+  masterBarrier(THREAD_OPTIMIZE_PER_SITE_AA, tr);  
+#else
+#ifdef _FINE_GRAIN_MPI
+  masterBarrierMPI(THREAD_OPTIMIZE_PER_SITE_AA, tr); 
+#else
+  {
+    int
+      s,
+      p;
+    
+    double  
+      *bestScore = (double *)malloc(tr->cdta->endsite * sizeof(double));	  
+    
+    for(s = 0; s < tr->cdta->endsite; s++)	    
+      bestScore[s] = unlikely;
+    for(p = 0; p < NUM_PROT_MODELS - 2; p++)
+      {
+	int 
+	  model;
+	
+	for(model = 0; model < tr->NumberOfModels; model++)
+	  {
+	    double
+	      lh;
+	    
+	    int
+	      counter,
+	      i,
+	      lower = tr->partitionData[model].lower,
+	      upper = tr->partitionData[model].upper;
+	    	    
+	    memcpy(tr->partitionData[model].EIGN,        tr->siteProtModel[p].EIGN,        sizeof(double) * 19);
+	    memcpy(tr->partitionData[model].EV,          tr->siteProtModel[p].EV,          sizeof(double) * 400);                
+	    memcpy(tr->partitionData[model].EI,          tr->siteProtModel[p].EI,          sizeof(double) * 380);
+	    memcpy(tr->partitionData[model].substRates,  tr->siteProtModel[p].substRates,  sizeof(double) * 190);        
+	    memcpy(tr->partitionData[model].frequencies, tr->siteProtModel[p].frequencies, sizeof(double) * 20);
+	    memcpy(tr->partitionData[model].tipVector,   tr->siteProtModel[p].tipVector,   sizeof(double) * 460);
+	    
+	    for(i = lower, counter = 0; i < upper; i++, counter++)
+	      {
+		lh = evaluatePartialGeneric(tr, i, 0.0, model);
+		
+		if(lh > bestScore[i])
+		  {
+		    bestScore[i] = lh;		    
+		    tr->partitionData[model].perSiteAAModel[counter] = p;
+		  }
+	      }
+	  }	     	           
+      }
+    
+    free(bestScore);
+  }
+#endif
+#endif
+}
+
+
 void modOpt(tree *tr, analdef *adef, boolean resetModel, double likelihoodEpsilon, boolean testGappedImplementation)
 { 
   int i, model, catOpt = 0; 
@@ -2366,9 +2429,21 @@ void modOpt(tree *tr, analdef *adef, boolean resetModel, double likelihoodEpsilo
 	  break;	  
 	default:
 	  assert(0);
-	}       
-
+	}                   
       
+       if(tr->estimatePerSiteAA)
+	{	 	     
+	  calcPerSiteProteinModels(tr);	  
+
+	  /*for(s = 0; s < tr->cdta->endsite; s++)
+	    printf("Site %d model %s\n", s, protModels[tr->modelAssignment[s]]);
+	    printf("\n\n");*/
+	  
+	  onlyInitrav(tr, tr->start); 	 	 
+	 	  
+	  treeEvaluate(tr, 0.1);	  	 
+	}
+
 
       printAAmatrix(tr, fabs(currentLikelihood - tr->likelihood));    
     }
