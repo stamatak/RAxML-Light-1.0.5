@@ -2699,7 +2699,7 @@ void modOptJoerg(tree *tr, analdef *adef)
 		{
 		  bestLikelihoods[model] = tr->perPartitionLH[model];
 		  bestModels[model] = modelsTested - 1;
-		  /*printf("Partition %d %s\n", model, protModels[bestModels[model]]);*/
+		  /*printf("Partition %d %s %f\n", model, protModels[bestModels[model]], tr->perPartitionLH[model]);*/
 		}	   
 	    }
 	}
