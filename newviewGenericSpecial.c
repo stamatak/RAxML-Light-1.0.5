@@ -4886,7 +4886,7 @@ void newviewIterative (tree *tr)
 #endif
 
   /* TODOFER: we need to revisit this issue */
-  assert(!(tr->useRecom && tr->multiBranch));
+  /*assert(!(tr->useRecom && tr->multiBranch));*/
 
   for(i = 1; i < tr->td[0].count; i++)
   {

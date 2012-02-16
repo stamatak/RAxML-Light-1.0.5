@@ -155,7 +155,7 @@ boolean smooth (tree *tr, nodeptr p)
       q = q->next;
     }	
 
-    if(tr->multiBranch)		  
+    if(tr->multiBranch && !tr->useRecom)		  
       newviewGenericMasked(tr, p);	
     else
       newviewGeneric(tr, p);     
