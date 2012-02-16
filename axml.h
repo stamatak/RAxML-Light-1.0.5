@@ -1662,7 +1662,11 @@ void newviewGTRGAMMA_AVX(int tipCase,
     double *x1_start, double *x2_start, double *x3_start,
     double *EV, double *tipVector,
     int *ex3, unsigned char *tipX1, unsigned char *tipX2,
-    const int n, double *left, double *right, int *wgt, int *scalerIncrement, const boolean useFastScaling
-    );
+    const int n, double *left, double *right, int *wgt, int *scalerIncrement, const boolean useFastScaling);
+
+void newviewGTRGAMMAPROT_AVX(int tipCase,
+			     double *x1, double *x2, double *x3, double *extEV, double *tipVector,
+			     int *ex3, unsigned char *tipX1, unsigned char *tipX2, int n, 
+			     double *left, double *right, int *wgt, int *scalerIncrement, const boolean useFastScaling);
 
 #endif

@@ -5161,6 +5161,7 @@ void newviewIterative (tree *tr)
               if(tr->estimatePerSiteAA)
               {		     			  			  
                 makeP_perSite(qz, rz, tr, model);
+
                 newviewGTRGAMMAPROT_perSite(tInfo->tipCase,
                     x1_start, x2_start, x3_start,
                     tr->partitionData[model].perSiteAAModel,
@@ -5189,10 +5190,17 @@ void newviewIterative (tree *tr)
                       x1_gap, x2_gap, x3_gap,
                       x1_gapColumn, x2_gapColumn, x3_gapColumn);
                 else
+#ifdef __AVX
+		  newviewGTRGAMMAPROT_AVX(tInfo->tipCase,
+					  x1_start, x2_start, x3_start, tr->partitionData[model].EV, tr->partitionData[model].tipVector,
+					  ex3, tipX1, tipX2,
+					  width, left, right, wgt, &scalerIncrement, TRUE);
+#else
                   newviewGTRGAMMAPROT(tInfo->tipCase,
                       x1_start, x2_start, x3_start, tr->partitionData[model].EV, tr->partitionData[model].tipVector,
                       ex3, tipX1, tipX2,
                       width, left, right, wgt, &scalerIncrement, TRUE);
+#endif
               }
             }		  
             break;	
