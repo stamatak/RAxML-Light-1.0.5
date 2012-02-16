@@ -28,11 +28,11 @@ extern FILE   *INFILE, *permutationFile, *logFile, *infoFile;
 
 extern char seq_file[1024];
 extern char permFileName[1024], resultFileName[1024], 
-  logFileName[1024], checkpointFileName[1024], infoFileName[1024], run_id[128], workdir[1024], bootStrapFile[1024], bootstrapFileName[1024], 
-  bipartitionsFileName[1024],bipartitionsFileNameBranchLabels[1024]; 
+       logFileName[1024], checkpointFileName[1024], infoFileName[1024], run_id[128], workdir[1024], bootStrapFile[1024], bootstrapFileName[1024], 
+       bipartitionsFileName[1024],bipartitionsFileNameBranchLabels[1024]; 
 
- 
-  
+
+
 static void reorderNodes(tree *tr, nodeptr *np, nodeptr p, int *count)
 {
   int i, found = 0;
@@ -40,31 +40,31 @@ static void reorderNodes(tree *tr, nodeptr *np, nodeptr p, int *count)
   if(isTip(p->number, tr->mxtips))    
     return;
   else
-    {              
-      for(i = tr->mxtips + 1; (i <= (tr->mxtips + tr->mxtips - 1)) && (found == 0); i++)
-	{
-	  if (p == np[i] || p == np[i]->next || p == np[i]->next->next)
-	    {
-	      if(p == np[i])			       
-		tr->nodep[*count + tr->mxtips + 1] = np[i];		 		
-	      else
-		{
-		  if(p == np[i]->next)		  
-		    tr->nodep[*count + tr->mxtips + 1] = np[i]->next;		     	   
-		  else		   
-		    tr->nodep[*count + tr->mxtips + 1] = np[i]->next->next;		    		    
-		}
+  {              
+    for(i = tr->mxtips + 1; (i <= (tr->mxtips + tr->mxtips - 1)) && (found == 0); i++)
+    {
+      if (p == np[i] || p == np[i]->next || p == np[i]->next->next)
+      {
+        if(p == np[i])			       
+          tr->nodep[*count + tr->mxtips + 1] = np[i];		 		
+        else
+        {
+          if(p == np[i]->next)		  
+            tr->nodep[*count + tr->mxtips + 1] = np[i]->next;		     	   
+          else		   
+            tr->nodep[*count + tr->mxtips + 1] = np[i]->next->next;		    		    
+        }
 
-	      found = 1;	      	     
-	      *count = *count + 1;
-	    }
-	} 
-      
-      assert(found != 0);
-     
-      reorderNodes(tr, np, p->next->back, count);     
-      reorderNodes(tr, np, p->next->next->back, count);                
-    }
+        found = 1;	      	     
+        *count = *count + 1;
+      }
+    } 
+
+    assert(found != 0);
+
+    reorderNodes(tr, np, p->next->back, count);     
+    reorderNodes(tr, np, p->next->next->back, count);                
+  }
 }
 
 void nodeRectifier(tree *tr)
@@ -72,18 +72,18 @@ void nodeRectifier(tree *tr)
   nodeptr *np = (nodeptr *)malloc(2 * tr->mxtips * sizeof(nodeptr));
   int i;
   int count = 0;
-  
+
   tr->start       = tr->nodep[1];
   tr->rooted      = FALSE;
 
   /* TODO why is tr->rooted set to FALSE here ?*/
-  
+
   for(i = tr->mxtips + 1; i <= (tr->mxtips + tr->mxtips - 1); i++)
     np[i] = tr->nodep[i];           
-  
+
   reorderNodes(tr, np, tr->start->back, &count); 
 
- 
+
   free(np);
 }
 

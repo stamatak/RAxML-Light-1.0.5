@@ -75,7 +75,7 @@
 
 #define twotothe256  \
   115792089237316195423570985008687907853269984665640564039457584007913129639936.0  
-                                                     /*  2**256 (exactly)  */
+/*  2**256 (exactly)  */
 
 #define minlikelihood  (1.0/twotothe256)
 #define minusminlikelihood -minlikelihood
@@ -94,7 +94,8 @@
 
 #define badRear         -1
 
-#define NUM_BRANCHES     2
+#define NUM_BRANCHES     1
+
 
 #define TRUE             1
 #define FALSE            0
@@ -147,7 +148,7 @@
    on the other hand 0.001 caused problems with some of the 16-state secondary structure models
 
    For some reason the frequency settings seem to be repeatedly causing numerical problems
-   
+
 */
 
 #define ITMAX 100
@@ -184,8 +185,8 @@ extern double exp_approx (double x);
 #define PointGamma(prob,alpha,beta)  PointChi2(prob,2.0*(alpha))/(2.0*(beta))
 
 #define programName        "RAxML-Light"
-#define programVersion     "1.0.5"
-#define programDate        "June 2011"
+#define programVersion     "1.0.6"
+#define programDate        "February 2012"
 
 
 #define  TREE_EVALUATION            0
@@ -334,10 +335,33 @@ extern double exp_approx (double x);
 #define GAMMA_I     2
 
 
+/* recomp */
+#define SLOT_UNUSED            -2 
+#define NODE_UNPINNED          -3 
+#define INNER_NODE_INIT_STLEN  -1 
+#define MIN_RECOM_FRACTION     0.1 
+#define MAX_RECOM_FRACTION     1.0 
+/* E recomp */
+
 
 
 typedef  int boolean;
 
+/* recomp */
+typedef struct
+{
+  int numVectors;      /* #inner vectors in RAM*/
+  int *iVector;        /* size: numVectors, stores node id || SLOT_UNUSED  */
+  int *iNode;          /* size: inner nodes, stores slot id || NODE_UNPINNED */
+  int *stlen;          /* #tips behind the current orientation of the indexed inner node */ 
+  int *unpinnable;     /* size:numVectors , TRUE if we dont need the vector */
+  int maxVectorsUsed;
+#ifdef _DEBUG_RECOMPUTATION
+  double pinTime;
+#endif
+  boolean allSlotsBusy; 
+} recompVectors;
+/* E recomp */
 
 typedef struct {
   double lh;
@@ -368,9 +392,9 @@ typedef unsigned int parsimonyNumber;
 #define PCF 32
 
 /*
-  typedef uint64_t parsimonyNumber;
+   typedef uint64_t parsimonyNumber;
 
-  #define PCF 16
+#define PCF 16
 
 
 typedef unsigned char parsimonyNumber;
@@ -384,7 +408,7 @@ typedef struct
   entry **table;
   hashNumberType entryCount;
 }
-  hashtable;
+hashtable;
 
 
 struct stringEnt
@@ -395,13 +419,13 @@ struct stringEnt
 };
 
 typedef struct stringEnt stringEntry;
- 
+
 typedef struct
 {
   hashNumberType tableSize;
   stringEntry **table;
 }
-  stringHashtable;
+stringHashtable;
 
 
 typedef struct
@@ -409,7 +433,7 @@ typedef struct
   unsigned int  parsimonyScore;
   unsigned int  parsimonyState;
 }
-  parsimonyVector;
+parsimonyVector;
 
 
 typedef struct ratec
@@ -417,7 +441,9 @@ typedef struct ratec
   double accumulatedSiteLikelihood;
   double rate;
 }
-  rateCategorize;
+rateCategorize;
+
+
 
 
 typedef struct
@@ -428,6 +454,11 @@ typedef struct
   int rNumber;
   double qz[NUM_BRANCHES];
   double rz[NUM_BRANCHES];
+  /* recom */
+  int slot_p;
+  int slot_q;
+  int slot_r;
+  /* E recom */
 } traversalInfo;
 
 typedef struct
@@ -484,21 +515,18 @@ typedef struct
   int partitions;
   int *partitionList;
 }
-  linkageData;
+linkageData;
 
 typedef struct
 {
   int entries;
   linkageData* ld;
 }
-  linkageList;
+linkageList;
 
 
 typedef  struct noderec
 {
-  unsigned int    isPresent[NUM_BRANCHES / MASK_LENGTH];
-  struct noderec  *backs[NUM_BRANCHES];
-  char            xs[NUM_BRANCHES];
   branchInfo      *bInf;
   double           z[NUM_BRANCHES];
   struct noderec  *next;
@@ -508,14 +536,14 @@ typedef  struct noderec
   int              number;
   char             x;
 }
-  node, *nodeptr;
+node, *nodeptr;
 
 typedef struct
-  {
-    double lh;
-    int number;
-  }
-  info;
+{
+  double lh;
+  int number;
+}
+info;
 
 typedef struct bInf {
   double likelihood;
@@ -564,13 +592,16 @@ typedef struct {
   int     protFreqs;
   int     mxtips;
   int             **expVector;
-  double          **xVector;
+
+  double       **xVector;
   size_t           *xSpaceVector;
- 
+
+
+
   unsigned char            **yVector;
   char   *partitionName;
   double *sumBuffer;
- 
+
   double *gammaRates;
 
   double *EIGN;
@@ -582,7 +613,7 @@ typedef struct {
 
 
 
-  
+
 
   double *left;
   double *right;
@@ -594,25 +625,25 @@ typedef struct {
   double *tipVector; 
   double *substRates;
   double *perSiteLL;
-  
+
   double *perSiteRates;
 
   double *wr;
   double *wr2;
 
-  
+
 
   unsigned int    *globalScaler;
   double          *globalScalerDouble;
   int    *perSiteAAModel;
   int    *wgt;
- 
+
   int    *rateCategory;
   int    *symmetryVector;
   int    *frequencyGrouping;
   boolean nonGTR;
   double alpha;
-  
+
 
   int gapVectorLength;
   unsigned int *gapVector;
@@ -651,11 +682,11 @@ typedef struct List_{
 #define SLOW_SPRS     3
 
 typedef struct {
- 
+
   int state;
 
   unsigned int vLength;
-  
+
   int rearrangementsMax;
   int rearrangementsMin;
   int thoroughIterations;
@@ -666,7 +697,7 @@ typedef struct {
   int bestTrav;
   int    Thorough;
   int    optimizeRateCategoryInvocations;
-  
+
   double accumulatedTime;
 
   double startLH; 
@@ -674,15 +705,15 @@ typedef struct {
   double previousLh;
   double difference;
   double epsilon;
-  
+
   boolean impr;
   boolean cutoff;  
-       
+
   double tr_startLH;
   double tr_endLH;
   double tr_likelihood;
   double tr_bestOfNode;
-  
+
   double tr_lhCutoff;
   double tr_lhAVG;
   double tr_lhDEC;
@@ -690,7 +721,7 @@ typedef struct {
   int    tr_itCount;  
   int    tr_doCutoff;
 
-                                                                    
+
 } checkPointState;
 
 
@@ -706,10 +737,37 @@ typedef struct {
   double right[1600] __attribute__ ((aligned (BYTE_ALIGNMENT)));
 } siteAAModels;
 
+/* recomp */
+#ifdef _DEBUG_RECOMPUTATION
+typedef struct {
+  unsigned long int numTraversals;
+  unsigned long int tt;
+  unsigned long int ti;
+  unsigned long int ii;
+  unsigned int *travlenFreq;
+} traversalCounter;
+#endif
+/* E recomp */
+
 typedef  struct  {
+
+  /* recomp */
+
+
+  recompVectors *rvec;
+  float vectorRecomFraction;
+  boolean useRecom;
+
+#ifdef _DEBUG_RECOMPUTATION 
+  traversalCounter *travCounter;
+  double stlenTime;
+#endif
+
+  /* E recomp */
+
   boolean useGappedImplementation;
   boolean saveMemory;
-  
+
   siteAAModels siteProtModel[2 * (NUM_PROT_MODELS - 2)];
 
   boolean estimatePerSiteAA;
@@ -721,16 +779,16 @@ typedef  struct  {
   int    *inserts;
   int    branchCounter;
 
- 
+
 
 #if (defined(_USE_PTHREADS) || (_FINE_GRAIN_MPI))
   /*
-    do we need this stuff ?
-  */
+     do we need this stuff ?
+     */
   /*unsigned int **bitVectors;
     hashtable *h;*/
   boolean    manyPartitions;
-    
+
   int *partitionAssignment;   
 
   double *temporaryVector;
@@ -739,30 +797,30 @@ typedef  struct  {
   double *temporarySumBuffer;
   size_t contiguousVectorLength;
   size_t contiguousScalingLength;  
- 
- 
+
+
 
   int *contiguousRateCategory;
   int *contiguousWgt;
- 
+
 
   unsigned char **contiguousTips;
 
   double *contiguousWR;
   double *contiguousWR2;
-  
-  
- 
+
+
+
   unsigned char *y_ptr; 
- 
+
   double *wrPtr;
   double *wr2Ptr;
 
- 
+
 
   double *perSiteLLPtr;
   int    *wgtPtr;
-  
+
   int    *rateCategoryPtr;
 
   int threadID;
@@ -770,7 +828,7 @@ typedef  struct  {
   double upper_spacing;
   double *lhs;
 #endif
-  
+
 
 
   parsimonyNumber **parsimonyState_A;
@@ -780,7 +838,7 @@ typedef  struct  {
   unsigned int *parsimonyScore; 
   int *ti;
   unsigned int compressedWidth;
-  
+
   int numberOfTrees; 
 
   stringHashtable  *nameHash;
@@ -809,7 +867,7 @@ typedef  struct  {
 
   double           *wr;
   double           *wr2;
-  
+
   double           *sumBuffer;
   double           *perSiteLL;
   double           coreLZ[NUM_BRANCHES];
@@ -829,14 +887,14 @@ typedef  struct  {
   nodeptr          rightNodes[NUM_BRANCHES]; 
   nodeptr          storedBacks[NUM_BRANCHES];
   lhList          *likelihoodList[NUM_BRANCHES];
- 
+
   double           zLeft[NUM_BRANCHES];
   double           zRight[NUM_BRANCHES];
   double           zDown[NUM_BRANCHES];
 
- 
-  
- 
+
+
+
   branchInfo	   *bInf;
 
   int              multiStateModel;
@@ -848,7 +906,7 @@ typedef  struct  {
   /* the stuff below is shared among DNA and AA, span does
      not change depending on datatype */
 
-  
+
   double           *fracchanges;
 
   /* model stuff end */
@@ -878,7 +936,7 @@ typedef  struct  {
   double           endLH;
   double           likelihood;
   double          *likelihoods;
- 
+
   node           **nodep;
   nodeptr          nodeBaseAddress;
   node            *start;
@@ -893,7 +951,7 @@ typedef  struct  {
   int              nextnode;  
   int              NumberOfModels;
   int              parsimonyLength;
-  
+
   int              checkPointCounter;
   int              treeID;
   int              numberOfOutgroups;
@@ -935,7 +993,7 @@ typedef  struct  {
   double lzr[NUM_BRANCHES];
   double lzi[NUM_BRANCHES];
 
- 
+
   int mr_thresh;
 #ifdef _USE_PTHREADS
 
@@ -951,7 +1009,7 @@ typedef  struct  {
   int bipStatusLen;
   entry **entriesOfSection;
   int recommendedAmountJobs;
- 
+
 
   /* used for printBip */
   boolean *hasAncestor; 
@@ -967,7 +1025,7 @@ typedef  struct  {
   pthread_mutex_t** mutexesForHashing; 
 
 
- 
+
 
 #endif
 
@@ -976,7 +1034,7 @@ typedef  struct  {
   unsigned int vLength;
 
   hashtable *h;
-  
+
 
 } tree;
 
@@ -994,7 +1052,7 @@ typedef struct
   nodeptr p, q;
   int cp, cq;
 }
-  connectRELL, *connptrRELL;
+connectRELL, *connptrRELL;
 
 typedef  struct
 {
@@ -1002,7 +1060,7 @@ typedef  struct
   int             start;
   double          likelihood;
 }
-  topolRELL;
+topolRELL;
 
 
 typedef  struct
@@ -1010,7 +1068,7 @@ typedef  struct
   int max;
   topolRELL **t;
 }
-  topolRELL_LIST;
+topolRELL_LIST;
 
 
 /**************************************************************/
@@ -1018,39 +1076,39 @@ typedef  struct
 
 
 typedef struct conntyp {
-    double           z[NUM_BRANCHES];           /* branch length */
-    node            *p, *q;       /* parent and child sectors */
-    void            *valptr;      /* pointer to value of subtree */
-    int              descend;     /* pointer to first connect of child */
-    int              sibling;     /* next connect from same parent */
-    } connect, *connptr;
+  double           z[NUM_BRANCHES];           /* branch length */
+  node            *p, *q;       /* parent and child sectors */
+  void            *valptr;      /* pointer to value of subtree */
+  int              descend;     /* pointer to first connect of child */
+  int              sibling;     /* next connect from same parent */
+} connect, *connptr;
 
 typedef  struct {
-    double           likelihood;
+  double           likelihood;
   int              initialTreeNumber;
-    connect         *links;       /* pointer to first connect (start) */
-    node            *start;
-    int              nextlink;    /* index of next available connect */
-                                  /* tr->start = tpl->links->p */
-    int              ntips;
-    int              nextnode;
-    int              scrNum;      /* position in sorted list of scores */
-    int              tplNum;      /* position in sorted list of trees */
+  connect         *links;       /* pointer to first connect (start) */
+  node            *start;
+  int              nextlink;    /* index of next available connect */
+  /* tr->start = tpl->links->p */
+  int              ntips;
+  int              nextnode;
+  int              scrNum;      /* position in sorted list of scores */
+  int              tplNum;      /* position in sorted list of trees */
 
-    } topol;
+} topol;
 
 typedef struct {
-    double           best;        /* highest score saved */
-    double           worst;       /* lowest score saved */
-    topol           *start;       /* starting tree for optimization */
-    topol          **byScore;
-    topol          **byTopol;
-    int              nkeep;       /* maximum topologies to save */
-    int              nvalid;      /* number of topologies saved */
-    int              ninit;       /* number of topologies initialized */
-    int              numtrees;    /* number of alternatives tested */
-    boolean          improved;
-    } bestlist;
+  double           best;        /* highest score saved */
+  double           worst;       /* lowest score saved */
+  topol           *start;       /* starting tree for optimization */
+  topol          **byScore;
+  topol          **byTopol;
+  int              nkeep;       /* maximum topologies to save */
+  int              nvalid;      /* number of topologies saved */
+  int              ninit;       /* number of topologies initialized */
+  int              numtrees;    /* number of alternatives tested */
+  boolean          improved;
+} bestlist;
 
 typedef  struct {
   int              categories;
@@ -1151,13 +1209,7 @@ extern void computeRogueTaxa(tree *tr, char* treeSetFileName, analdef *adef);
 extern unsigned int precomputed16_bitcount(unsigned int n);
 
 
-extern double evaluateGenericMulti (tree *tr, nodeptr p, int model);
-extern void setupPointerMesh(tree *tr);
-extern void determineFullTraversalMulti(nodeptr p, tree *tr);
-extern void computeTraversalInfoMulti(nodeptr p, traversalInfo *ti, int *counter, int maxTips, int model);
-extern double evaluateIterativeMulti(tree *, boolean writeVector);
-extern void newviewIterativeMulti (tree *tr);
-extern void getxsnode (nodeptr p, int model);
+
 extern void findNext(nodeptr p, tree *tr, nodeptr *result);
 
 
@@ -1232,7 +1284,6 @@ extern boolean update ( tree *tr, nodeptr p );
 extern boolean smooth ( tree *tr, nodeptr p );
 extern boolean smoothTree ( tree *tr, int maxtimes );
 extern boolean localSmooth ( tree *tr, nodeptr p, int maxtimes );
-extern boolean localSmoothMulti(tree *tr, nodeptr p, int maxtimes, int model);
 extern void initInfoList ( int n );
 extern void freeInfoList ( void );
 extern void insertInfoList ( nodeptr node, double likelihood );
@@ -1270,7 +1321,7 @@ extern boolean freeBestTree ( bestlist *bt );
 
 
 extern char *Tree2String ( char *treestr, tree *tr, nodeptr p, boolean printBranchLengths, boolean printNames, boolean printLikelihood, 
-			   boolean rellTree, boolean finalPrint, analdef *adef, int perGene, boolean branchLabelSupport, boolean printSHSupport);
+    boolean rellTree, boolean finalPrint, analdef *adef, int perGene, boolean branchLabelSupport, boolean printSHSupport);
 extern void printTreePerGene(tree *tr, analdef *adef, char *fileName, char *permission);
 
 
@@ -1288,17 +1339,33 @@ extern void computeConsensusOnly(tree *tr, char* treeSetFileName, analdef *adef)
 extern double evaluatePartialGeneric (tree *, int i, double ki, int _model);
 extern double evaluateGeneric (tree *tr, nodeptr p);
 extern void newviewGeneric (tree *tr, nodeptr p);
-extern void newviewGenericMulti (tree *tr, nodeptr p, int model);
 extern void newviewGenericMasked (tree *tr, nodeptr p);
 extern void makenewzGeneric(tree *tr, nodeptr p, nodeptr q, double *z0, int maxiter, double *result, boolean mask);
-extern void makenewzGenericDistance(tree *tr, int maxiter, double *z0, double *result, int taxon1, int taxon2);
 extern double evaluatePartitionGeneric (tree *tr, nodeptr p, int model);
 extern void newviewPartitionGeneric (tree *tr, nodeptr p, int model);
 extern double evaluateGenericVector (tree *tr, nodeptr p);
 extern void categorizeGeneric (tree *tr, nodeptr p);
 extern double makenewzPartitionGeneric(tree *tr, nodeptr p, nodeptr q, double z0, int maxiter, int model);
 extern boolean isTip(int number, int maxTips);
-extern void computeTraversalInfo(nodeptr p, traversalInfo *ti, int *counter, int maxTips, int numBranches);
+/*extern void computeTraversalInfo(nodeptr p, traversalInfo *ti, int *counter, int maxTips, int numBranches);*/
+
+/* recom */
+
+extern void computeTraversalInfo(nodeptr p, traversalInfo *ti, int *counter, int maxTips, int numBranches, recompVectors *rvec, boolean recompute);
+extern boolean needsRecomp(boolean recompute, recompVectors *rvec, nodeptr p, int mxtips);
+extern void allocRecompVectorsInfo(tree *tr);
+extern void allocTraversalCounter(tree *tr);
+extern void unpinNode(recompVectors *v, int nodenum, int mxtips);
+extern void unpinAtomicSlot(recompVectors *v, int slot, int mxtips);
+extern boolean getxVector(recompVectors *rvec, int nodenum, int *slot, int mxtips);
+extern void computeTraversalInfoStlen(nodeptr p, int maxTips, recompVectors *rvec, int *count);
+extern void determineFullTraversalStlen(nodeptr p, tree *tr);
+extern void pinAtomicNode(recompVectors *v, int nodenum, int slot, int mxtips);
+#ifdef _DEBUG_RECOMPUTATION
+extern void countTraversal(tree *tr);
+extern void printTraversalInfo(tree *tr);
+#endif
+/* E recom */
 
 
 
@@ -1349,7 +1416,12 @@ extern nodeptr findAnyTip(nodeptr p, int numsp);
 
 extern void parseProteinModel(analdef *adef);
 
-extern void computeFullTraversalInfo(nodeptr p, traversalInfo *ti, int *counter, int maxTips, int numBranches);
+/* recomp */
+
+extern void computeFullTraversalInfo(nodeptr p, traversalInfo *ti, int *counter, int maxTips, int numBranches, recompVectors *rvec, boolean recompute);
+/*extern void computeFullTraversalInfo(nodeptr p, traversalInfo *ti, int *counter, int maxTips, int numBranches);*/
+
+/* E recomp */
 
 extern void computeNextReplicate(tree *tr, long *seed, int *originalRateCategories, int *originalInvariant, boolean isRapid, boolean fixRates);
 /*extern void computeNextReplicate(tree *tr, analdef *adef, int *originalRateCategories, int *originalInvariant);*/
@@ -1380,7 +1452,7 @@ extern void printBothOpenMPI(const char* format, ... );
 extern void initRateMatrix(tree *tr);
 
 extern void bitVectorInitravSpecial(unsigned int **bitVectors, nodeptr p, int numsp, unsigned int vectorLength, hashtable *h, int treeNumber, int function, branchInfo *bInf,
-				    int *countBranches, int treeVectorLength, boolean traverseOnly, boolean computeWRF);
+    int *countBranches, int treeVectorLength, boolean traverseOnly, boolean computeWRF);
 
 extern int getIncrement(tree *tr, int model);
 
@@ -1421,7 +1493,7 @@ extern boolean computeBootStopMPI(tree *tr, char *bootStrapFileName, analdef *ad
 #ifdef _USE_PTHREADS
 
 extern void makenewzClassify(tree *tr, int maxiter, double *result, double *z0, double *x1_start, double *x2_start,
-			     unsigned char *tipX1,  unsigned char *tipX2, int tipCase, boolean *partitionConverged);
+    unsigned char *tipX1,  unsigned char *tipX2, int tipCase, boolean *partitionConverged);
 
 extern void    newviewClassify(tree *tr, branchInfo *bInf, double *z);
 
@@ -1429,7 +1501,7 @@ extern void addTraverseRobIterative(tree *tr, int branchNumber);
 extern void insertionsParsimonyIterative(tree *tr, int branchNumber);
 
 extern void newviewClassifySpecial(tree *tr, double *x1_start, double *x2_start, double *x3_start, int *ex1, int *ex2, int *ex3,
-				   unsigned char *tipX1,  unsigned char *tipX2, int tipCase, double *pz, double *qz);
+    unsigned char *tipX1,  unsigned char *tipX2, int tipCase, double *pz, double *qz);
 extern double evalCL(tree *tr, double *x2, int *ex2, unsigned char *tip, double *pz);
 
 extern void testInsertThoroughIterative(tree *tr, int branchNumber, boolean bootstrap);
@@ -1489,24 +1561,24 @@ extern void testInsertThoroughIterative(tree *tr, int branchNumber, boolean boot
 
 /*
 
-parallel tree parsing abandoned ...
+   parallel tree parsing abandoned ...
 
-  #define THREAD_FILL_HASH_FOR_CONSENSUS      41
+#define THREAD_FILL_HASH_FOR_CONSENSUS      41
 
 parallel dropset comp. currently doesn't scale well 
 
-  #define THREAD_FIND_BEST_DROPSET            42
-  #define THREAD_CALC_DROPSETS                43
+#define THREAD_FIND_BEST_DROPSET            42
+#define THREAD_CALC_DROPSETS                43
 
 */
 
 /*
-  Pthreads-based MP computations don't really scale for the 
-  SSE3-based optimized version 
+   Pthreads-based MP computations don't really scale for the 
+   SSE3-based optimized version 
 
-  #define THREAD_FAST_EVALUATE_PARSIMONY        XX
-  #define THREAD_FAST_NEWVIEW_PARSIMONY         XX
-  #define THREAD_INIT_FAST_PARSIMONY            XX
+#define THREAD_FAST_EVALUATE_PARSIMONY        XX
+#define THREAD_FAST_NEWVIEW_PARSIMONY         XX
+#define THREAD_INIT_FAST_PARSIMONY            XX
 */
 
 typedef struct
@@ -1514,7 +1586,7 @@ typedef struct
   tree *tr;
   int threadNumber;
 }
-  threadData;
+threadData;
 
 void threadMakeVector(tree *tr, int tid);
 void threadComputeAverage(tree *tr, int tid);
@@ -1558,7 +1630,7 @@ typedef struct
   double lower_spacing;
   double upper_spacing;
 } jobDescr;
-    
+
 
 
 extern void masterBarrierMPI(int jobType, tree *tr);
@@ -1574,23 +1646,23 @@ MPI_Datatype jobDescriptor;
 
 #ifdef __AVX
 void newviewGTRCAT_AVX(int tipCase,  double *EV,  int *cptr,
-			   double *x1_start, double *x2_start,  double *x3_start, double *tipVector,
-			   int *ex3, unsigned char *tipX1, unsigned char *tipX2,
-		       int n,  double *left, double *right, int *wgt, int *scalerIncrement, const boolean useFastScaling);
+    double *x1_start, double *x2_start,  double *x3_start, double *tipVector,
+    int *ex3, unsigned char *tipX1, unsigned char *tipX2,
+    int n,  double *left, double *right, int *wgt, int *scalerIncrement, const boolean useFastScaling);
 
 
 void newviewGenericCATPROT_AVX(int tipCase, double *extEV,
-			       int *cptr,
-			       double *x1, double *x2, double *x3, double *tipVector,
-			       int *ex3, unsigned char *tipX1, unsigned char *tipX2,
-			       int n, double *left, double *right, int *wgt, int *scalerIncrement, const boolean useFastScaling);
+    int *cptr,
+    double *x1, double *x2, double *x3, double *tipVector,
+    int *ex3, unsigned char *tipX1, unsigned char *tipX2,
+    int n, double *left, double *right, int *wgt, int *scalerIncrement, const boolean useFastScaling);
 
 
 void newviewGTRGAMMA_AVX(int tipCase,
-			 double *x1_start, double *x2_start, double *x3_start,
-			 double *EV, double *tipVector,
-			 int *ex3, unsigned char *tipX1, unsigned char *tipX2,
-			 const int n, double *left, double *right, int *wgt, int *scalerIncrement, const boolean useFastScaling
-			 );
+    double *x1_start, double *x2_start, double *x3_start,
+    double *EV, double *tipVector,
+    int *ex3, unsigned char *tipX1, unsigned char *tipX2,
+    const int n, double *left, double *right, int *wgt, int *scalerIncrement, const boolean useFastScaling
+    );
 
 #endif
