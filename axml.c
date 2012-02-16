@@ -2750,11 +2750,12 @@ static void printREADME(void)
 {
   printVersionInfo();
   printf("\n");  
-  printf("\nTo report bugs send an email to raxml@h-its.org\n");
-  printf("Please send me all input files, the exact invocation, details of the HW and operating system,\n");
+  printf("\nTo report bugs go to the RAxML google group at http://groups.google.com/group/raxml\n");
+  printf("Please specify the exact invocation, details of the HW and operating system,\n");
   printf("as well as all error messages printed to screen.\n\n\n");
 
-  printf("raxmlLight|raxmlLight-PTHREADS|raxmlLight-MPI\n");
+  printf("raxmlLight|raxmlLight-PTHREADS|raxmlLight-MPI|\n");
+  printf("raxmlLight-AVX|raxmlLight-PTHREADS-AVX|raxmlLight-MPI-AVX\n");
   printf("      -s sequenceFileName| -G binarySequnceFile\n");
   printf("      -n outputFileName\n");
   printf("      -m substitutionModel\n");
@@ -2763,8 +2764,8 @@ static void printREADME(void)
   printf("      [-c numberOfCategories]\n");
   printf("      [-D]\n");
   printf("      [-e likelihoodEpsilon] \n");
-  printf("      [-f d|o]\n");    
-  printf("      [-h] \n");
+  printf("      [-f d|o]\n");   
+  printf("      [-h]\n");
   printf("      [-i initialRearrangementSetting] \n");
   printf("      [-M]\n");
   printf("      [-o outGroupName1[,outGroupName2[,...]]] \n");
@@ -2773,6 +2774,7 @@ static void printREADME(void)
 #if (defined(_USE_PTHREADS) || (_FINE_GRAIN_MPI))
   printf("      [-Q]\n");
 #endif
+  printf("      [-r recomputationFraction]\n");
   printf("      [-S]\n");
   printf("      [-T numberOfThreads]\n");  
   printf("      [-v]\n"); 
