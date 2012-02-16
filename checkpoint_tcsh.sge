@@ -1,0 +1,88 @@
+#!/bin/tcsh 
+#$ -N checkpoint_tcsh
+#$ -cwd
+#$ -o $JOB_NAME.o$JOB_ID
+#$ -j y
+#$ -q systest
+#$ -A A-ccsc
+#$ -pe 16way 32
+#$ -V
+#$ -l h_rt=48:00:00
+#$ -hold_jid  "checkpoint_tcsh"
+
+#System specific settings
+#Set the name of the parallel job starter
+#TACC uses the ibrun script
+set par_exe="ibrun" 
+
+#RAxML settings
+#Name of the RAxML executable
+set raxml_exe="raxmlLight-MPI"
+
+#Set the name of the run
+set raxml_name="55k_20"
+
+#Set the name of the parsimony tree
+set parsimony_tree="55k.parsimonyTree"
+
+#Set the name of the taxa file
+set taxa_file="55593.phy"
+
+#Checkpoint settings
+#Keep an index file of the runs
+set run_count="./run.${raxml_name}"
+
+
+#If the info file doesn't exist then this is the first run
+if( ! -e RAxML_info.${raxml_name}.0 ) then
+  #if it is, set run_count to 0
+  echo "0" >! ${run_count}
+  echo "Initial run of ${raxml_name} "
+  # Initial run
+  ${par_exe} ./${raxml_exe} -m GTRCAT -s ${taxa_file}  -t ${parsimony_tree} -n ${raxml_name}.0 
+
+  #Finished
+  echo "Finished initial ${raxml_name} run # 0"
+
+#Otherwise it's a restart
+else
+
+  #Get the count of the last run
+  set count = `cat ${run_count}`
+  @ countp1 = $count + 1
+  echo "Restart run #${countp1} of ${raxml_name} "
+
+  #Set the info filename of the last run
+  set info_file="RAxML_info.${raxml_name}.${count}"
+
+  #Check for the proper info file
+  if( ! -e ${info_file} ) then
+    echo "ERROR: ${info_file} not found for run #${count} "
+    exit
+  endif
+
+  #Check to see if the tree has been completed
+  grep -q Overall ${info_file} 
+  if( ! $? ) then
+   echo "Finished in previous run"
+   exit
+  endif
+
+  #Find the last checkpoint file
+  set ckpt_file=`/bin/ls -1tr RAxML_binaryCheckpoint.${raxml_name}.${count}_* |& tail -1 `
+  #Exit if checkpoint file from the last run cannot be found
+  if( $? ) then
+    echo "ERROR: RAxML_binaryCheckpoint.${raxml_name}.${count}_* file not found"
+    exit
+  endif
+
+  #Reset the count in the count file
+  echo "${countp1}" >! ${run_count}
+
+  #Restart run from checkpoint file
+  ${par_exe} ./${raxml_exe} -R ${ckpt_file} -m GTRCAT -s ${taxa_file} -n ${raxml_name}.${countp1} 
+
+  #Finished
+  echo "Finished ${raxml_name} run # ${countp1}"
+endif
+

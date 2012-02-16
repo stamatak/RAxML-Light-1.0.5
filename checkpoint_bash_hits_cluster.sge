@@ -1,0 +1,92 @@
+#$ -S /bin/bash
+#$ -N checkpoint_bash
+#$ -cwd
+#$ -o $JOB_NAME.o$JOB_ID
+#$ -j y
+#$ -q standard-48.q
+#$ -pe mvapich 48
+#$ -hold_jid  "checkpoint_bash"
+
+. /etc/profile.d/modules.sh
+
+module load sge intel/compiler/64/11.1/075 mvapich2/intel/64/1.5.1-qlc
+
+#System specific settings
+#Set the name of the parallel job starter
+#TACC uses the ibrun script
+par_exe="mpirun_rsh -np 48 -hostfile $TMPDIR/machines" 
+
+#RAxML settings
+#Name of the RAxML executable
+raxml_exe="./raxmlLight-MPI"
+
+#Set the name of the run
+raxml_name="120k_0_1"
+
+#Set the name of the parsimony tree
+parsimony_tree="RAxML_parsimonyTree.T0.1"
+
+#Set the name of the taxa file
+taxa_file="BIG_W_ITS.fixed"
+
+#set the name of the model file
+model_file="BIG_W_ITS.model"
+
+#Checkpoint settings
+#Keep an index file of the runs
+run_count="./run.${raxml_name}"
+
+
+#If the info file doesn't exist then this is the first run
+if [ ! -e RAxML_info.${raxml_name}.0 ]; then 
+  #if it is, set run_count to 0
+  echo "0" >| ${run_count}
+  echo "Initial run of ${raxml_name} "
+  # Initial run
+  ${par_exe} ./${raxml_exe} -m GTRCAT -q ${model_file} -s ${taxa_file}  -t ${parsimony_tree} -n ${raxml_name}.0 
+
+  #Finished
+  echo "Finished initial ${raxml_name} run # 0"
+
+#Otherwise it's a restart
+else
+
+  #Get the count of the last run
+  count=`cat ${run_count}`
+  let countp1=count+1
+  echo "Restart run #${countp1} of ${raxml_name} "
+
+  #Set the info filename of the last run
+  info_file="RAxML_info.${raxml_name}.${count}"
+
+  #Check for the proper info file
+  if [ ! -e ${info_file} ]; then
+    echo "ERROR: ${info_file} not found for run #${count} "
+    exit
+  fi
+
+  #Check to see if the tree has been completed
+  grep -q Overall ${info_file} 
+  if  [ $? == 0 ] ; then
+   echo "Finished in previous run"
+   exit
+  fi
+
+  #Find the last checkpoint file
+  ckpt_file=`/bin/ls -1tr RAxML_binaryCheckpoint.${raxml_name}.${count}_* 2>/dev/null | tail -1 `
+  #Exit if checkpoint file from the last run cannot be found
+  if [ x$ckpt_file == x ] ; then
+    echo "ERROR: RAxML_binaryCheckpoint.${raxml_name}.${count}_* file not found"
+    exit
+  fi
+
+  #Reset the count in the count file
+  echo "${countp1}" >| ${run_count}
+
+  #Restart run from checkpoint file
+  ${par_exe} ./${raxml_exe} -R ${ckpt_file} -m GTRCAT -q ${model_file} -s ${taxa_file} -n ${raxml_name}.${countp1} 
+
+  #Finished
+  echo "Finished ${raxml_name} run # ${countp1}"
+fi
+
