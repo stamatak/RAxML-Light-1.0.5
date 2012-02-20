@@ -957,13 +957,22 @@ void newviewGTRGAMMAPROT_AVX(int tipCase,
     scale, 
     addScale = 0;
 
-  /* __m256d 
+ 
+#ifndef GCC_VERSION
+#define GCC_VERSION (__GNUC__ * 10000 + __GNUC_MINOR__ * 100 + __GNUC_PATCHLEVEL__)
+#endif
+
+
+#if GCC_VERSION < 40500
+   __m256d
     bitmask = _mm256_set_pd(0,0,0,-1);
-
-  */
-
+#else
   __m256i
-    bitmask = /*_mm256_set_i(0,0,0,-1);*/ _mm256_set_epi32(0, 0, 0, 0, 0, 0, -1, -1);
+    bitmask = _mm256_set_epi32(0, 0, 0, 0, 0, 0, -1, -1);
+#endif
+
+
+
   /* this is required for doing some pre-computations that help to save 
      numerical operations. What we are actually computing here are additional lookup tables 
      for each possible state a certain data-type can assume.
