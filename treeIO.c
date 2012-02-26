@@ -1134,7 +1134,15 @@ int treeReadLen (FILE *fp, tree *tr, boolean readBranches, boolean readNodeLabel
 
   p = tr->nodep[(tr->nextnode)++]; 
 
-  while((ch = treeGetCh(fp)) != '(');
+  while((ch = treeGetCh(fp)) != '(')
+    {
+      if(ch == EOF)
+	{
+	  printBothOpen("No starting parenthesis ( in the newick file, the tree file might be an empty file\n");
+	  assert(0);
+	}
+    }
+
 
   if(!topologyOnly)
     assert(readBranches == FALSE && readNodeLabels == FALSE);
