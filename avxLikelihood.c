@@ -1070,7 +1070,7 @@ void newviewGTRGAMMAPROT_AVX(int tipCase,
 		    __m256d llv = _mm256_load_pd(&ll[l]);
 		    umpX1v = FMAMACC(umpX1v,vv,llv);
 		    __m256d rrv = _mm256_load_pd(&rr[l]);
-		    umpX1v = FMAMACC(umpX2v,vv,rrv);
+		    umpX2v = FMAMACC(umpX2v,vv,rrv);
 #else		    
 		    umpX1v = _mm256_add_pd(umpX1v,_mm256_mul_pd(vv,_mm256_load_pd(&ll[l])));
 		    umpX2v = _mm256_add_pd(umpX2v,_mm256_mul_pd(vv,_mm256_load_pd(&rr[l])));
