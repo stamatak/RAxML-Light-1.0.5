@@ -14,6 +14,11 @@
 #include <pmmintrin.h>
 #include <immintrin.h>
 
+#ifdef _FMA
+#include <x86intrin.h>
+#define FMAMACC(a,b,c) _mm256_macc_pd(b,c,a)
+#endif
+
 const union __attribute__ ((aligned (BYTE_ALIGNMENT)))
 {
   uint64_t i[4];
@@ -137,8 +142,11 @@ void  newviewGTRGAMMA_AVX(int tipCase,
 		
 		    __m256d 
 		      evv = _mm256_load_pd(&extEV[l * 4]);
-						  
+#ifdef _FMA
+		    xv = FMAMACC(xv,x1v,evv);
+#else						  
 		    xv = _mm256_add_pd(xv, _mm256_mul_pd(x1v, evv));
+#endif
 		  }
 		
 		_mm256_store_pd(&x3[16 * i + 4 * k], xv);
@@ -202,8 +210,12 @@ void  newviewGTRGAMMA_AVX(int tipCase,
 		
 		    __m256d 
 		      evv = _mm256_load_pd(&extEV[l * 4]);
-						  
+			
+#ifdef _FMA
+		    xv[k] = FMAMACC(xv[k],x1v,evv);
+#else			  
 		    xv[k] = _mm256_add_pd(xv[k], _mm256_mul_pd(x1v, evv));
+#endif
 		  }
 		    
 		if(scale)
@@ -550,8 +562,11 @@ void newviewGTRCAT_AVX(int tipCase,  double *EV,  int *cptr,
 		
 	      __m256d 
 		evv = _mm256_load_pd(&EV[l * 4]);
-						
+#ifdef _FMA
+	      vv = FMAMACC(vv,x1v,evv);
+#else				
 	      vv = _mm256_add_pd(vv, _mm256_mul_pd(x1v, evv));						      	
+#endif
 	    }	  		  
 
 	  _mm256_store_pd(&x3_start[4 * i], vv);	    	   	    
@@ -583,8 +598,11 @@ void newviewGTRCAT_AVX(int tipCase,  double *EV,  int *cptr,
 	      __m256d 
 		evv = _mm256_load_pd(&EV[l * 4]);
 				
-	      /* vv = _mm256_fmadd_pd(x1v, evv, vv);*/
+#ifdef _FMA
+	      vv = FMAMACC(vv,x1v,evv);
+#else	      
 	      vv = _mm256_add_pd(vv, _mm256_mul_pd(x1v, evv));
+#endif
 	    }	  		  
 	  
 	  
@@ -628,8 +646,11 @@ void newviewGTRCAT_AVX(int tipCase,  double *EV,  int *cptr,
 		
 	      __m256d 
 		evv = _mm256_load_pd(&EV[l * 4]);
-						
+#ifdef _FMA
+	      vv = FMAMACC(vv,x1v,evv);
+#else						
 	      vv = _mm256_add_pd(vv, _mm256_mul_pd(x1v, evv));						      	
+#endif
 	    }	  		  
 
 	 
@@ -667,6 +688,10 @@ void newviewGTRCATPROT_AVX(int tipCase, double *extEV,
 
   int i, l, j, scale, addScale = 0;
 
+#ifdef _FMA
+  int k;
+#endif
+
   switch(tipCase)
     {
     case TIP_TIP:
@@ -698,7 +723,18 @@ void newviewGTRCATPROT_AVX(int tipCase, double *extEV,
 		  *ev = &extEV[l * 20],
 		  *lv = &le[l * 20],
 		  *rv = &ri[l * 20];														
-		
+
+#ifdef _FMA		
+		for(k = 0; k < 20; k += 4) 
+		  {
+		    __m256d vlv = _mm256_load_pd(&vl[k]);
+		    __m256d lvv = _mm256_load_pd(&lv[k]);
+		    x1v = FMAMACC(x1v,vlv,lvv);
+		    __m256d vrv = _mm256_load_pd(&vr[k]);
+		    __m256d rvv = _mm256_load_pd(&rv[k]);
+		    x2v = FMAMACC(x2v,vrv,rvv);
+		  }
+#else		
 		x1v = _mm256_add_pd(x1v, _mm256_mul_pd(_mm256_load_pd(&vl[0]), _mm256_load_pd(&lv[0])));
 		x1v = _mm256_add_pd(x1v, _mm256_mul_pd(_mm256_load_pd(&vl[4]), _mm256_load_pd(&lv[4])));
 		x1v = _mm256_add_pd(x1v, _mm256_mul_pd(_mm256_load_pd(&vl[8]), _mm256_load_pd(&lv[8])));
@@ -710,9 +746,16 @@ void newviewGTRCATPROT_AVX(int tipCase, double *extEV,
 		x2v = _mm256_add_pd(x2v,  _mm256_mul_pd(_mm256_load_pd(&vr[8]), _mm256_load_pd(&rv[8])));			    
 		x2v = _mm256_add_pd(x2v,  _mm256_mul_pd(_mm256_load_pd(&vr[12]), _mm256_load_pd(&rv[12])));				    
 		x2v = _mm256_add_pd(x2v,  _mm256_mul_pd(_mm256_load_pd(&vr[16]), _mm256_load_pd(&rv[16])));	
+#endif
 
 		x1v = hadd4(x1v, x2v);			
-		
+#ifdef _FMA
+		for(k = 0; k < 5; k++) 
+		  {
+		    __m256d evv = _mm256_load_pd(&ev[k*4]);
+		    vv[k] = FMAMACC(vv[k],x1v,evv);
+		  }	  
+#else		
 		__m256d 
 		  evv[5];
 	    	
@@ -726,9 +769,9 @@ void newviewGTRCATPROT_AVX(int tipCase, double *extEV,
 		vv[1] = _mm256_add_pd(vv[1], _mm256_mul_pd(x1v, evv[1]));
 		vv[2] = _mm256_add_pd(vv[2], _mm256_mul_pd(x1v, evv[2]));
 		vv[3] = _mm256_add_pd(vv[3], _mm256_mul_pd(x1v, evv[3]));
-		vv[4] = _mm256_add_pd(vv[4], _mm256_mul_pd(x1v, evv[4]));				      	
-	      }	  
-
+		vv[4] = _mm256_add_pd(vv[4], _mm256_mul_pd(x1v, evv[4]));				      		      	  
+#endif
+	      }
 	    _mm256_store_pd(&v[0], vv[0]);
 	    _mm256_store_pd(&v[4], vv[1]);
 	    _mm256_store_pd(&v[8], vv[2]);
@@ -765,7 +808,17 @@ void newviewGTRCATPROT_AVX(int tipCase, double *extEV,
 		*ev = &extEV[l * 20],
 		*lv = &le[l * 20],
 		*rv = &ri[l * 20];														
-	      
+#ifdef _FMA
+	      for(k = 0; k < 20; k += 4) 
+		{
+		  __m256d vlv = _mm256_load_pd(&vl[k]);
+		  __m256d lvv = _mm256_load_pd(&lv[k]);
+		  x1v = FMAMACC(x1v,vlv,lvv);
+		  __m256d vrv = _mm256_load_pd(&vr[k]);
+		  __m256d rvv = _mm256_load_pd(&rv[k]);
+		  x2v = FMAMACC(x2v,vrv,rvv);
+		}
+#else	      
 	      x1v = _mm256_add_pd(x1v, _mm256_mul_pd(_mm256_load_pd(&vl[0]), _mm256_load_pd(&lv[0])));
 	      x1v = _mm256_add_pd(x1v, _mm256_mul_pd(_mm256_load_pd(&vl[4]), _mm256_load_pd(&lv[4])));
 	      x1v = _mm256_add_pd(x1v, _mm256_mul_pd(_mm256_load_pd(&vl[8]), _mm256_load_pd(&lv[8])));
@@ -777,6 +830,7 @@ void newviewGTRCATPROT_AVX(int tipCase, double *extEV,
 	      x2v = _mm256_add_pd(x2v,  _mm256_mul_pd(_mm256_load_pd(&vr[8]), _mm256_load_pd(&rv[8])));			    
 	      x2v = _mm256_add_pd(x2v,  _mm256_mul_pd(_mm256_load_pd(&vr[12]), _mm256_load_pd(&rv[12])));				    
 	      x2v = _mm256_add_pd(x2v,  _mm256_mul_pd(_mm256_load_pd(&vr[16]), _mm256_load_pd(&rv[16])));
+#endif
 
 	      x1v = hadd4(x1v, x2v);			
 	      
@@ -788,12 +842,17 @@ void newviewGTRCATPROT_AVX(int tipCase, double *extEV,
 	      evv[2] = _mm256_load_pd(&ev[8]);
 	      evv[3] = _mm256_load_pd(&ev[12]);
 	      evv[4] = _mm256_load_pd(&ev[16]);		
-	      
+
+#ifdef _FMA
+	      for(k = 0; k < 5; k++)
+		vv[k] = FMAMACC(vv[k],x1v,evv[k]);		 
+#else	      
 	      vv[0] = _mm256_add_pd(vv[0], _mm256_mul_pd(x1v, evv[0]));
 	      vv[1] = _mm256_add_pd(vv[1], _mm256_mul_pd(x1v, evv[1]));
 	      vv[2] = _mm256_add_pd(vv[2], _mm256_mul_pd(x1v, evv[2]));
 	      vv[3] = _mm256_add_pd(vv[3], _mm256_mul_pd(x1v, evv[3]));
 	      vv[4] = _mm256_add_pd(vv[4], _mm256_mul_pd(x1v, evv[4]));				      	
+#endif
 	    }	  
 
 	   	     
@@ -874,7 +933,13 @@ void newviewGTRCATPROT_AVX(int tipCase, double *extEV,
 	      x2v = _mm256_add_pd(x2v,  _mm256_mul_pd(_mm256_load_pd(&vr[16]), _mm256_load_pd(&rv[16])));
 
 	      x1v = hadd4(x1v, x2v);			
-	      
+#ifdef _FMA
+	       for(k = 0; k < 5; k++) 
+		 {
+		   __m256d evv = _mm256_load_pd(&ev[k*4]);
+		   vv[k] = FMAMACC(vv[k],x1v,evv);
+		 }
+#else	      
 	      __m256d 
 		evv[5];
 	      
@@ -889,6 +954,7 @@ void newviewGTRCATPROT_AVX(int tipCase, double *extEV,
 	      vv[2] = _mm256_add_pd(vv[2], _mm256_mul_pd(x1v, evv[2]));
 	      vv[3] = _mm256_add_pd(vv[3], _mm256_mul_pd(x1v, evv[3]));
 	      vv[4] = _mm256_add_pd(vv[4], _mm256_mul_pd(x1v, evv[4]));				      	
+#endif
 	    }	  
 
 	   	     
@@ -1000,9 +1066,15 @@ void newviewGTRGAMMAPROT_AVX(int tipCase,
 		for(l = 0; l < 20; l+=4) 
 		  {
 		    __m256d vv = _mm256_load_pd(&v[l]);
-		    
+#ifdef _FMA
+		    __m256d llv = _mm256_load_pd(&ll[l]);
+		    umpX1v = FMAMACC(umpX1v,vv,llv);
+		    __m256d rrv = _mm256_load_pd(&rr[l]);
+		    umpX1v = FMAMACC(umpX2v,vv,rrv);
+#else		    
 		    umpX1v = _mm256_add_pd(umpX1v,_mm256_mul_pd(vv,_mm256_load_pd(&ll[l])));
 		    umpX2v = _mm256_add_pd(umpX2v,_mm256_mul_pd(vv,_mm256_load_pd(&rr[l])));
+#endif
 		  }
 		
 		umpX1v = hadd3(umpX1v);
@@ -1034,7 +1106,11 @@ void newviewGTRGAMMAPROT_AVX(int tipCase,
 		      {
 			__m256d vv = _mm256_load_pd(&v[l]);
 			__m256d extEvv = _mm256_load_pd(&extEV[20 * k + l]);
+#ifdef _FMA
+			vv = FMAMACC(vv,x1px2v,extEvv);
+#else
 			vv = _mm256_add_pd(vv,_mm256_mul_pd(x1px2v,extEvv));
+#endif
 			_mm256_store_pd(&v[l],vv);
 		      } 
 		  } 
@@ -1060,7 +1136,13 @@ void newviewGTRGAMMAPROT_AVX(int tipCase,
 		for(l = 0; l < 20; l+=4) 
 		  {
 		    __m256d vv = _mm256_load_pd(&v[l]);
+
+#ifdef _FMA
+		    __m256d leftv = _mm256_load_pd(&left[k * 20 + l]);
+		    umpX1v = FMAMACC(umpX1v,vv,leftv);
+#else
 		    umpX1v = _mm256_add_pd(umpX1v,_mm256_mul_pd(vv,_mm256_load_pd(&left[k * 20 + l])));
+#endif
 		  }
 		umpX1v = hadd3(umpX1v);
 		_mm256_maskstore_pd(&umpX1[80 * i + k],bitmask,umpX1v);
@@ -1080,7 +1162,13 @@ void newviewGTRGAMMAPROT_AVX(int tipCase,
 		    __m256d ump_x2v = _mm256_setzero_pd();
 		    for(j = 0; j < 20; j += 4) 
 		      {
+#ifdef _FMA
+			__m256d vv = _mm256_load_pd(&v[j]);
+			__m256d rightv = _mm256_load_pd(&right[k*400+l*20+j]);
+			ump_x2v = FMAMACC(ump_x2v,vv,rightv);
+#else
 			ump_x2v = _mm256_add_pd(ump_x2v, _mm256_mul_pd(_mm256_load_pd(&v[j]),_mm256_load_pd(&right[k*400+l*20+j])));
+#endif
 		      } 
 		    ump_x2v = hadd3(ump_x2v);
 		    _mm256_maskstore_pd(&ump_x2[l],bitmask,ump_x2v);
@@ -1099,7 +1187,13 @@ void newviewGTRGAMMAPROT_AVX(int tipCase,
 		      {
 			/*v[j] += x1px2 * extEV[l * states	+ j];*/
 			__m256d vv = _mm256_load_pd(&v[j]);
+#ifdef _FMA
+			__m256d extEVv =_mm256_load_pd(&extEV[l * 20 + j]);
+			vv = FMAMACC(vv,x1px2v,extEVv);
+#else
 			vv = _mm256_add_pd(vv,_mm256_mul_pd(x1px2v,_mm256_load_pd(&extEV[l * 20 + j])));
+#endif
+
 			_mm256_store_pd(&v[j],vv);
 		      }
 		  } 
@@ -1164,8 +1258,13 @@ void newviewGTRGAMMAPROT_AVX(int tipCase,
 		      __m256d rightv = _mm256_load_pd(&right[k * 400 + l * 20 + j]);
 		      __m256d vlv = _mm256_load_pd(&vl[j]);
 		      __m256d vrv = _mm256_load_pd(&vr[j]);
+#ifdef _FMA
+		      al = FMAMACC(al,vlv,leftv);
+		      ar = FMAMACC(ar,vrv,rightv);
+#else
 		      al = _mm256_add_pd(al,_mm256_mul_pd(vlv,leftv));
 		      ar = _mm256_add_pd(ar,_mm256_mul_pd(vrv,rightv));
+#endif
 		    }
 		  al = hadd3(al);
 		  ar = hadd3(ar);
@@ -1174,7 +1273,11 @@ void newviewGTRGAMMAPROT_AVX(int tipCase,
 		    {
 		      __m256d vv = _mm256_load_pd(&v[j]);
 		      __m256d extEvv = _mm256_load_pd(&extEV[20 * l + j]);
+#ifdef _FMA
+		      vv = FMAMACC(vv,al,extEvv);
+#else
 		      vv = _mm256_add_pd(vv,_mm256_mul_pd(al,extEvv));
+#endif
 		      _mm256_store_pd(&v[j],vv);
 		    } 
 		} 
