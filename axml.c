@@ -2956,20 +2956,20 @@ static void get_args(int argc, char *argv[], analdef *adef, tree *tr)
 
   int  
     optind = 1,        
-           c,
-           nameSet = 0,
-           alignmentSet = 0,
-           multipleRuns = 0,
-           constraintSet = 0,
-           treeSet = 0,
-           groupSet = 0,
-           modelSet = 0,
-           treesSet  = 0;
-
+    c,
+    nameSet = 0,
+    alignmentSet = 0,
+    multipleRuns = 0,
+    constraintSet = 0,
+    treeSet = 0,
+    groupSet = 0,
+    modelSet = 0,
+    treesSet  = 0;
+  
   boolean
     bSeedSet = FALSE,
-             xSeedSet = FALSE,
-             multipleRunsSet = FALSE;
+    xSeedSet = FALSE,
+    multipleRunsSet = FALSE;
 
   run_id[0] = 0;
   workdir[0] = 0;
@@ -3050,6 +3050,7 @@ static void get_args(int argc, char *argv[], analdef *adef, tree *tr)
           tr->searchConvergenceCriterion = TRUE;	
           break;
         case 'R':
+	  
           adef->useCheckpoint = TRUE;
           strcpy(binaryCheckpointInputName, optarg);
           break;     
@@ -3151,7 +3152,7 @@ static void get_args(int argc, char *argv[], analdef *adef, tree *tr)
           strcpy(resultDir, optarg);
           resultDirSet = TRUE;
           break;
-        case 't':
+        case 't':	 
           strcpy(tree_file, optarg);
           adef->restart = TRUE;
           treeSet = 1;
@@ -3207,12 +3208,18 @@ static void get_args(int argc, char *argv[], analdef *adef, tree *tr)
 #endif
 
   if(adef->restart && adef->useCheckpoint)
-  {
-    if(processID == 0)
-      printf("\n Error, you must either specify a starting tree via \"-t\" or a checkpoint file via \"-R\"\n");
-    errorExit(-1);
-  }
+    {
+      if(processID == 0)
+	printf("\n Error, you must either specify a starting tree via \"-t\" or a checkpoint file via \"-R\", you can not specify both at the same time!\n");
+      errorExit(-1);
+    }
 
+  if(!adef->restart && !adef->useCheckpoint)
+    {
+      if(processID == 0)
+	printf("\n Error, you must either specify a starting tree via \"-t\" or a checkpoint file via \"-R\"!\n");
+      errorExit(-1);
+    }
 
   if(!modelSet)
   {
