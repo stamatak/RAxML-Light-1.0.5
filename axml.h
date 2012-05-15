@@ -185,8 +185,8 @@ extern double exp_approx (double x);
 #define PointGamma(prob,alpha,beta)  PointChi2(prob,2.0*(alpha))/(2.0*(beta))
 
 #define programName        "RAxML-Light"
-#define programVersion     "1.0.7"
-#define programDate        "March 2012"
+#define programVersion     "1.0.8"
+#define programDate        "May 2012"
 
 
 #define  TREE_EVALUATION            0
