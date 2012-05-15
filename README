@@ -1,1 +1,62 @@
-RAxML-Light 
+RAxML-Light Readme
+
+For detailed documentation please refer to the RAxML-Light manual included
+in this archive: RAxML-Light-Manual.pdf
+
+Quick-start:
+
+To compile the various versions: 
+
+The distribution comes with six Makefiles for the sequential, Pthreads, and MPI-based versions. 
+The sequential, Pthreads and MPI versions either use SSE3 128-bit wide SIMD (Single Instruction Multiple Data) 
+or AVX 256-bit wide SIMD instructions which are offered by all recent AMD and Intel x86 architectures. 
+The default compiler is gcc, but you may experiment with Intel icc or the Portland PGI compiler 
+(although those compilers have not been tested by me). 
+The parallel MPI version works with Intel icc and gcc and so far I have tested the MVAPICH2 (gcc and icc) 
+and OpenMPI (gcc) compilers. 
+
+
+To compile the sequential versions, type: 
+
+make -f Makefile.SSE3.gcc
+make -f Makefile.AVX.gcc
+
+This will generate executables called raxmlLight/raxmlLight-AVX. 
+If you want to compile the Pthreads version next, first type “rm *.o” in your terminal to remove 
+the object files generated for compiling and linking the sequential program and type:
+
+
+make -f Makefile.SSE3.PTHREADS.gcc
+make -f Makefile.AVX.PTHREADS.gcc
+
+This will produce executables called raxmlLight-Pthreads and  raxmlLight-Pthreads-AVX respectively
+
+Then, to compile the MPI version, first type “rm *.o” again and then type:
+
+make -f Makefile.SSE3.MPI
+make -f Makefile.AVX.MPI
+
+which will generate executables called raxmlLight-MPI/raxmlLight-MPI-AVX. For this you will need to have a 
+MPI compiler (called mpicc) installed on your system/cluster. 
+If you don't know what a MPI compiler is, just talk to your local geek. 
+
+For testing purposes under Ubuntu Linux, it is probably easiest to install OpenMPI. 
+On our local cluster here at HITS using the 64-bit icc compiler v11.1 and MVAPICH2 yielded the best performance. 
+It is really worth playing around with different compiler and MPI implementations, because this can yield performance differences of up to 30%.
+
+WARNING: For performance reasons the number of partitions is hard-coded in the MPI version of the code. 
+This is admittedly not very elegant, but we had to sacrifice flexibility for performance. 
+Thus, when running RaxML-Light, you may sometimes see it abort with the following or a similar error message:
+
+raxmlLight-MPI: fineGrainMpi.c: startFineGrainMpi: Assertion `tr->NumberOfModels == 2' failed.
+
+In such a case you will have to edit source file axml.h, and amend the following line:
+
+#define NUM_BRANCHES 1
+to read:
+
+#define NUM_BRANCHES X
+where X is the number of partitions in the dataset you want to analyze. 
+Thereafter, please re-compile the MPI code and everything should work.
+
+For details on command line options please refer to the manual.
