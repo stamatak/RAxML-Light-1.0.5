@@ -228,7 +228,7 @@ static void memSaveInit(tree *tr)
 static int sendBufferSizeInt(int numberOfModels)
 {
   int
-    size = 12;
+    size = 13;
 
   size += (size_t)numberOfModels * 9;
 
@@ -454,6 +454,7 @@ void fineGrainWorker(tree *tr)
 
   tr->useRecom  = sendBufferInt[dataCounter++];
   tr->saveMemory = sendBufferInt[dataCounter++];
+  tr->useGammaMedian = sendBufferInt[dataCounter++];
   tr->useGappedImplementation = sendBufferInt[dataCounter++];
   tr->innerNodes = sendBufferInt[dataCounter++];
   tr->maxCategories = sendBufferInt[dataCounter++];
@@ -704,7 +705,7 @@ void fineGrainWorker(tree *tr)
           MPI_Bcast(&tr->partitionData[model].lower, 1  , MPI_INT, 0, MPI_COMM_WORLD);
           MPI_Bcast(&tr->partitionData[model].upper, 1  , MPI_INT, 0, MPI_COMM_WORLD);
           MPI_Bcast(&tr->partitionData[model].alpha, 1  , MPI_DOUBLE, 0, MPI_COMM_WORLD);
-          makeGammaCats(tr->partitionData[model].alpha, tr->partitionData[model].gammaRates, 4);
+          makeGammaCats(tr->partitionData[model].alpha, tr->partitionData[model].gammaRates, 4, tr->useGammaMedian);
         }
 
         MPI_Bcast(tr->cdta->patrat,       tr->originalCrunchedLength, MPI_DOUBLE, 0, MPI_COMM_WORLD);
@@ -1029,7 +1030,7 @@ void fineGrainWorker(tree *tr)
           for(model = 0; model < tr->NumberOfModels; model++)	  	    
           {
             tr->partitionData[model].alpha = buffer[bufIndex++];
-            makeGammaCats(tr->partitionData[model].alpha, tr->partitionData[model].gammaRates, 4);				
+            makeGammaCats(tr->partitionData[model].alpha, tr->partitionData[model].gammaRates, 4, tr->useGammaMedian);				
             tr->executeModel[model] = job.executeModel[model];
           }	      			
 
@@ -1063,7 +1064,7 @@ void fineGrainWorker(tree *tr)
           for(model = 0; model < tr->NumberOfModels; model++)	  	    
           {
             tr->partitionData[model].alpha = buffer[bufIndex++];
-            makeGammaCats(tr->partitionData[model].alpha, tr->partitionData[model].gammaRates, 4);					       
+            makeGammaCats(tr->partitionData[model].alpha, tr->partitionData[model].gammaRates, 4, tr->useGammaMedian);					       
           }	      				    	  
 
           free(buffer);
@@ -1175,6 +1176,7 @@ void startFineGrainMpi(tree *tr, analdef *adef)
 
   sendBufferInt[dataCounter++] = tr->useRecom;
   sendBufferInt[dataCounter++] = tr->saveMemory;
+  sendBufferInt[dataCounter++] = tr->useGammaMedian;
   sendBufferInt[dataCounter++] = tr->useGappedImplementation;
   sendBufferInt[dataCounter++] = tr->innerNodes;
   sendBufferInt[dataCounter++] = tr->maxCategories;
@@ -1430,7 +1432,7 @@ void masterBarrierMPI(int jobType, tree *tr)
           MPI_Bcast(&tr->partitionData[model].lower, 1  , MPI_INT, 0, MPI_COMM_WORLD);
           MPI_Bcast(&tr->partitionData[model].upper, 1  , MPI_INT, 0, MPI_COMM_WORLD);
           MPI_Bcast(&tr->partitionData[model].alpha, 1  , MPI_DOUBLE, 0, MPI_COMM_WORLD);
-          makeGammaCats(tr->partitionData[model].alpha, tr->partitionData[model].gammaRates, 4); 
+          makeGammaCats(tr->partitionData[model].alpha, tr->partitionData[model].gammaRates, 4, tr->useGammaMedian); 
         }
 
 

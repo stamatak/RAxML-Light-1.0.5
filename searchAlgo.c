@@ -1286,7 +1286,7 @@ static void readCheckpoint(tree *tr, analdef *adef)
     myfread(tr->partitionData[model].tipVector, sizeof(double),  pLengths[dataType].tipVectorLength, f);  
     myfread(tr->partitionData[model].substRates, sizeof(double),  pLengths[dataType].substRatesLength, f);  
     myfread(&(tr->partitionData[model].alpha), sizeof(double), 1, f);
-    makeGammaCats(tr->partitionData[model].alpha, tr->partitionData[model].gammaRates, 4);
+    makeGammaCats(tr->partitionData[model].alpha, tr->partitionData[model].gammaRates, 4, tr->useGammaMedian);
   }
 
 #ifdef _FINE_GRAIN_MPI

@@ -94,7 +94,7 @@
 
 #define badRear         -1
 
-#define NUM_BRANCHES     2
+#define NUM_BRANCHES     1
 
 
 #define TRUE             1
@@ -1035,6 +1035,7 @@ typedef  struct  {
 
   hashtable *h;
 
+  boolean useGammaMedian;
 
 } tree;
 
@@ -1244,7 +1245,7 @@ extern double LnGamma ( double alpha );
 extern double IncompleteGamma ( double x, double alpha, double ln_gamma_alpha );
 extern double PointNormal ( double prob );
 extern double PointChi2 ( double prob, double v );
-extern void makeGammaCats (double alpha, double *gammaRates, int K);
+extern void makeGammaCats (double alpha, double *gammaRates, int K, boolean useMedian);
 extern void initModel ( tree *tr, rawdata *rdta, cruncheddata *cdta, analdef *adef );
 extern void doAllInOne ( tree *tr, analdef *adef );
 

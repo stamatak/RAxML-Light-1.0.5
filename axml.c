@@ -2760,6 +2760,7 @@ static void printREADME(void)
   printf("      -n outputFileName\n");
   printf("      -m substitutionModel\n");
   printf("      -t userStartingTree| -R binaryCheckpointFile\n");
+  printf("      [-a]\n");
   printf("      [-B]\n"); 
   printf("      [-c numberOfCategories]\n");
   printf("      [-D]\n");
@@ -2780,6 +2781,11 @@ static void printREADME(void)
   printf("      [-v]\n"); 
   printf("      [-w outputDirectory] \n"); 
   printf("      [-X]\n");
+  printf("\n");
+
+  printf("      -a      use the median for the discrete approximation of the GAMMA model of rate heterogeneity\n");
+  printf("\n");
+  printf("              DEFAULT: OFF\n");
   printf("\n");
   printf("      -B      Parse phylip file and conduct pattern compression, then store the output in a \n");
   printf("              binary file called sequenceFileName.binary that can be read via the \"-G\" option\n");
@@ -3000,6 +3006,7 @@ static void get_args(int argc, char *argv[], analdef *adef, tree *tr)
   tr->multiStateModel  = GTR_MULTI_STATE;
   tr->useGappedImplementation = FALSE;
   tr->saveMemory = FALSE;
+  tr->useGammaMedian = FALSE;
   tr->estimatePerSiteAA = FALSE;
 
   /* recom */
@@ -3016,14 +3023,17 @@ static void get_args(int argc, char *argv[], analdef *adef, tree *tr)
 
 #if (defined(_USE_PTHREADS) || (_FINE_GRAIN_MPI))
   while(!bad_opt &&
-      ((c = mygetopt(argc,argv,"T:P:R:e:c:f:i:m:t:w:s:n:o:q:r:G:vhMSDBQX", &optind, &optarg))!=-1))
+      ((c = mygetopt(argc,argv,"T:P:R:e:c:f:i:m:t:w:s:n:o:q:r:G:avhMSDBQX", &optind, &optarg))!=-1))
 #else
     while(!bad_opt &&
-        ((c = mygetopt(argc,argv,"T:P:R:e:c:f:i:m:t:w:s:n:o:q:r:G:vhMSDBX", &optind, &optarg))!=-1))
+        ((c = mygetopt(argc,argv,"T:P:R:e:c:f:i:m:t:w:s:n:o:q:r:G:avhMSDBX", &optind, &optarg))!=-1))
 #endif
-    {
+      {
       switch(c)
       {
+      case 'a':
+	tr->useGammaMedian = TRUE;
+	break;
         case 'X':
           tr->estimatePerSiteAA = TRUE;       
           break;
@@ -3436,7 +3446,12 @@ static void printModelAndProgramInfo(tree *tr, analdef *adef, int argc, char *ar
       if(adef->useInvariant)
         strcpy(modelType, "GAMMA+P-Invar");
       else
-        strcpy(modelType, "GAMMA");
+	{
+	  if(tr->useGammaMedian)
+	    strcpy(modelType, "GAMMA with Median");
+	  else
+	    strcpy(modelType, "GAMMA");
+	}
     }
 
     printBoth(infoFile, "\n\nThis is %s version %s released by Alexandros Stamatakis, Christian Goll, and Fernando Izquierdo-Carrasco (ole) in %s.\n\n",  programName, programVersion, programDate);
@@ -4550,6 +4565,7 @@ static void initPartition(tree *tr, tree *localTree, int tid)
     int totalLength = 0;
 
     localTree->rateHetModel            = tr->rateHetModel;
+    localTree->useGammaMedian          = tr->useGammaMedian;
     localTree->saveMemory              = tr->saveMemory;
     localTree->useGappedImplementation = tr->useGappedImplementation;
     localTree->innerNodes              = tr->innerNodes;

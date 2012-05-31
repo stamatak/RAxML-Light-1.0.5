@@ -362,7 +362,7 @@ static void evaluateChange(tree *tr, int rateNumber, double *value, double *resu
             int index = ll->ld[i].partitionList[k];
             tr->executeModel[index] = TRUE;
             tr->partitionData[index].alpha = value[i];
-            makeGammaCats(tr->partitionData[index].alpha, tr->partitionData[index].gammaRates, 4);
+            makeGammaCats(tr->partitionData[index].alpha, tr->partitionData[index].gammaRates, 4, tr->useGammaMedian);
           }
         }
       }
@@ -1030,7 +1030,7 @@ static void optAlpha(tree *tr, double modelEpsilon, linkageList *ll)
       for(k = 0; k < ll->ld[i].partitions; k++)
       {	      
         tr->partitionData[ll->ld[i].partitionList[k]].alpha = startAlpha[i];
-        makeGammaCats(tr->partitionData[ll->ld[i].partitionList[k]].alpha, tr->partitionData[ll->ld[i].partitionList[k]].gammaRates, 4); 		
+        makeGammaCats(tr->partitionData[ll->ld[i].partitionList[k]].alpha, tr->partitionData[ll->ld[i].partitionList[k]].gammaRates, 4, tr->useGammaMedian); 		
       }
 #if (defined(_USE_PTHREADS) || defined(_FINE_GRAIN_MPI))
       revertModel++;
@@ -2572,7 +2572,7 @@ void modOptJoerg(tree *tr, analdef *adef)
       /* initialize the discretization of the GAMMA function --- we use 4 discrete rates
          to approximate the integral over GAMMA we actually want to compute */
 
-      makeGammaCats(tr->partitionData[model].alpha, tr->partitionData[model].gammaRates, 4); 
+      makeGammaCats(tr->partitionData[model].alpha, tr->partitionData[model].gammaRates, 4, tr->useGammaMedian); 
 
       /* use empirical protein frequencies in contrast to the pre-defined ones that come with the 
          models. The empirical freqs typically yield better likelihood scores, so let's not worry about this 
