@@ -3632,7 +3632,7 @@ static void printModelAndProgramInfo(tree *tr, analdef *adef, int argc, char *ar
             if(adef->mode != THOROUGH_PARSIMONY)
             {
               printBoth(infoFile, "Substitution Matrix: %s\n", (adef->userProteinModel)?"External user-specified model":protModels[tr->partitionData[model].protModels]);
-              printBoth(infoFile, "%s Base Frequencies:\n", (tr->partitionData[model].protFreqs == 1)?"Empirical":"Fixed");
+              printBoth(infoFile, "%s Base Frequencies\n", (tr->partitionData[model].protFreqs == 1)?"Empirical":"Fixed");
             }
             break;
           case BINARY_DATA:
@@ -4135,13 +4135,11 @@ void printModelParams(tree *tr, analdef *adef)
 
     getDataTypeString(tr, model, typeOfData);      
 
-    printBothOpen("Model Parameters of Partition %d, Name: %s, Type of Data: %s\n",
-        model, tr->partitionData[model].partitionName, typeOfData);
-    printBothOpen("alpha: %f\n", tr->partitionData[model].alpha);
-
-
-
-
+    printBothOpen("Partition: %d\n", model);
+    printBothOpen("Name: %s\n", tr->partitionData[model].partitionName);
+    printBothOpen("Type of Data: %s\n", typeOfData);
+    if(tr->rateHetModel == GAMMA)
+      printBothOpen("alpha: %f\n", tr->partitionData[model].alpha);
 
     f = tr->partitionData[model].frequencies;
     r = tr->partitionData[model].substRates;
@@ -4238,9 +4236,7 @@ static void finalizeInfoFile(tree *tr, analdef *adef)
     accumulatedTime = accumulatedTime + t;
 
     switch(adef->mode)
-    {
-      case MESH_TREE_SEARCH:
-        break;
+    {      
       case TREE_EVALUATION :
         printBothOpen("\n\nOverall Time for Tree Evaluation %f\n", t);
         printBothOpen("Final GAMMA  likelihood: %f\n", tr->likelihood);
@@ -4317,91 +4313,20 @@ static void finalizeInfoFile(tree *tr, analdef *adef)
 
 
         break;
-      case  BIG_RAPID_MODE:
-        if(adef->boot)
-        {
-          printBothOpen("\n\nOverall Time for %d Bootstraps %f\n", adef->multipleRuns, t);
-          printBothOpen("\n\nAverage Time per Bootstrap %f\n", (double)(t/((double)adef->multipleRuns)));
-          printBothOpen("All %d bootstrapped trees written to: %s\n", adef->multipleRuns, bootstrapFileName);
-        }
-        else
-        {
-          if(adef->multipleRuns > 1)
-          {
-            double avgLH = 0;
-            double bestLH = unlikely;
-            int i, bestI  = 0;
+      case  BIG_RAPID_MODE:                
+	printBothOpen("\n\nOverall Time for 1 Inference %f\n", t);
+	printBothOpen("\nOverall accumulated Time (in case of restarts): %f\n\n", accumulatedTime);
+	printBothOpen("Likelihood   : %f\n", tr->likelihood);
+	printBothOpen("\n\n");
 
-            for(i = 0; i < adef->multipleRuns; i++)
-            {
-              avgLH   += tr->likelihoods[i];
-              if(tr->likelihoods[i] > bestLH)
-              {
-                bestLH = tr->likelihoods[i];
-                bestI  = i;
-              }
-            }
-            avgLH /= ((double)adef->multipleRuns);
-
-            printBothOpen("\n\nOverall Time for %d Inferences %f\n", adef->multipleRuns, t);
-            printBothOpen("Average Time per Inference %f\n", (double)(t/((double)adef->multipleRuns)));
-            printBothOpen("Average Likelihood   : %f\n", avgLH);
-            printBothOpen("\n");
-            printBothOpen("Best Likelihood in run number %d: likelihood %f\n\n", bestI, bestLH);
-
-            if(adef->checkpoints)
-              printBothOpen("Checkpoints written to:                 %s.RUN.%d.* to %d.*\n", checkpointFileName, 0, adef->multipleRuns - 1);
-            if(!adef->restart)
-            {
-              if(adef->randomStartingTree)
-                printBothOpen("Random starting trees written to:       %s.RUN.%d to %d\n", randomFileName, 0, adef->multipleRuns - 1);
-              else
-                printBothOpen("Parsimony starting trees written to:    %s.RUN.%d to %d\n", permFileName, 0, adef->multipleRuns - 1);
-            }
-            printBothOpen("Final trees written to:                 %s.RUN.%d to %d\n", resultFileName,  0, adef->multipleRuns - 1);
-            printBothOpen("Execution Log Files written to:         %s.RUN.%d to %d\n", logFileName, 0, adef->multipleRuns - 1);
-            printBothOpen("Execution information file written to:  %s\n", infoFileName);
-          }
-          else
-          {
-            printBothOpen("\n\nOverall Time for 1 Inference %f\n", t);
-            printBothOpen("\nOverall accumulated Time (in case of restarts): %f\n\n", accumulatedTime);
-            printBothOpen("Likelihood   : %f\n", tr->likelihood);
-            printBothOpen("\n\n");
-
-            if(adef->checkpoints)
-              printBothOpen("Checkpoints written to:                %s.*\n", checkpointFileName);
-            if(!adef->restart)
-            {
-              if(adef->randomStartingTree)
-                printBothOpen("Random starting tree written to:       %s\n", randomFileName);
-              else
-                printBothOpen("Parsimony starting tree written to:    %s\n", permFileName);
-            }
-            printBothOpen("Final tree written to:                 %s\n", resultFileName);
-            printBothOpen("Execution Log File written to:         %s\n", logFileName);
-            printBothOpen("Execution information file written to: %s\n",infoFileName);
-          }
-        }
-
-        break;
-      case CALC_BIPARTITIONS:
-        printBothOpen("\n\nTime for Computation of Bipartitions %f\n", t);
-        printBothOpen("Tree with bipartitions written to file:  %s\n", bipartitionsFileName);
-        printBothOpen("Tree with bipartitions as branch labels written to file:  %s\n", bipartitionsFileNameBranchLabels);	  
-        printBothOpen("Execution information file written to :  %s\n",infoFileName);
-        break;
-      case PER_SITE_LL:
-        printBothOpen("\n\nTime for Optimization of per-site log likelihoods %f\n", t);
-        printBothOpen("Per-site Log Likelihoods written to File %s in Tree-Puzzle format\n",  perSiteLLsFileName);
-        printBothOpen("Execution information file written to :  %s\n",infoFileName);
-
-        break;
-      case PARSIMONY_ADDITION:
-        printBothOpen("\n\nTime for MP stepwise addition %f\n", t);
-        printBothOpen("Execution information file written to :  %s\n",infoFileName);
-        printBothOpen("Complete parsimony tree written to:      %s\n", permFileName);
-        break;
+	
+	printModelParams(tr, adef);
+	
+	
+	printBothOpen("Final tree written to:                 %s\n", resultFileName);
+	printBothOpen("Execution Log File written to:         %s\n", logFileName);
+	printBothOpen("Execution information file written to: %s\n",infoFileName);	        
+        break;     
       default:
         assert(0);
     }
