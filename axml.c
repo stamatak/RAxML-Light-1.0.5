@@ -2782,7 +2782,6 @@ static void printREADME(void)
   printf("      [-w outputDirectory] \n"); 
   printf("      [-X]\n");
   printf("\n");
-
   printf("      -a      use the median for the discrete approximation of the GAMMA model of rate heterogeneity\n");
   printf("\n");
   printf("              DEFAULT: OFF\n");

@@ -505,6 +505,13 @@ SINGLE_NUMBER:
       }
     }  
 
+    if(*ch == '/')
+      {
+	printf("\nRAxML detected the character \"/\" in your partition file.\n");
+	printf("Did you mean to write something similar to this: \"DNA, p1=1-100\\3\" ?\n");
+	printf("It's actually a backslash, not a slash, the program will exit now with an error!\n\n");
+      }  
+
     assert(0);
 
 parsed:
