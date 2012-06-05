@@ -5658,7 +5658,39 @@ int main (int argc, char *argv[])
     {
       accumulatedTime = 0.0;   
 
-      getStartingTree(tr, adef);     
+      getStartingTree(tr, adef);  
+
+
+      /* code for testing correctness in per site likelihood implementation */
+
+      if(0)
+	{
+	  int
+	    l,
+	    i,
+	    model;
+	  
+	  double 
+	    lh_standard,
+	    lh_perSite = 0.0;
+	  
+	  evaluateGenericInitrav(tr, tr->start);
+	  
+	  lh_standard = tr->likelihood;
+	  
+	  for(model = 0; model < tr->NumberOfModels; model++)
+	    {
+	      int 	       
+		lower = tr->partitionData[model].lower,
+		upper = tr->partitionData[model].upper;
+	      
+	      for(i = lower, l = 0; i < upper; i++, l++)
+		lh_perSite += evaluatePartialGeneric(tr, i, 1.0, model);
+	    }
+	  
+	  printf("likelihood: %1.40f, per-site likelihood: %1.40f\n", lh_standard, lh_perSite);
+	  exit(0);
+	}
 #ifdef _JOERG		  
       /* 
          at this point the code has parsed the input alignment 
