@@ -5674,8 +5674,8 @@ int main (int argc, char *argv[])
 	    lh_standard,
 	    lh_perSite = 0.0;
 	  
-	  evaluateGenericInitrav(tr, tr->start);
-	  
+	  evaluateGenericInitrav(tr, tr->start);	  	 
+
 	  lh_standard = tr->likelihood;
 	  
 	  for(model = 0; model < tr->NumberOfModels; model++)
