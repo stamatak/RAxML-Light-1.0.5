@@ -1087,7 +1087,12 @@ static void writeCheckpoint(tree *tr)
   myfwrite(tr->cdta->patratStored, sizeof(double), tr->rdta->sites + 1, f);
   myfwrite(tr->wr,  sizeof(double), tr->rdta->sites + 1, f);
   myfwrite(tr->wr2,  sizeof(double), tr->rdta->sites + 1, f);
-
+  
+ /* need to store this as well in checkpoints, otherwise the branch lengths 
+     in the output tree files will be wrong, not the internal branch lengths though */
+  
+  myfwrite(tr->fracchanges,  sizeof(double), tr->NumberOfModels, f);
+  myfwrite(&(tr->fracchange),   sizeof(double), 1, f);
 
   /* pInfo */
 
@@ -1267,6 +1272,12 @@ static void readCheckpoint(tree *tr, analdef *adef)
   myfread(tr->cdta->patratStored, sizeof(double), tr->rdta->sites + 1, f);
   myfread(tr->wr,  sizeof(double), tr->rdta->sites + 1, f);
   myfread(tr->wr2,  sizeof(double), tr->rdta->sites + 1, f);
+
+  /* need to read this as well in checkpoints, otherwise the branch lengths 
+     in the output tree files will be wrong, not the internal branch lengths though */
+  
+  myfread(tr->fracchanges,  sizeof(double), tr->NumberOfModels, f);
+  myfread(&(tr->fracchange),   sizeof(double), 1, f);
 
 
   /* pInfo */
