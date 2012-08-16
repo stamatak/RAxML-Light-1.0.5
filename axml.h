@@ -94,7 +94,7 @@
 
 #define badRear         -1
 
-#define NUM_BRANCHES     1
+#define NUM_BRANCHES     5
 
 
 #define TRUE             1
@@ -185,8 +185,8 @@ extern double exp_approx (double x);
 #define PointGamma(prob,alpha,beta)  PointChi2(prob,2.0*(alpha))/(2.0*(beta))
 
 #define programName        "RAxML-Light"
-#define programVersion     "1.0.9"
-#define programDate        "May 2012"
+#define programVersion     "1.1.0"
+#define programDate        "August 2012"
 
 
 #define  TREE_EVALUATION            0
@@ -339,7 +339,7 @@ extern double exp_approx (double x);
 #define SLOT_UNUSED            -2 
 #define NODE_UNPINNED          -3 
 #define INNER_NODE_INIT_STLEN  -1 
-#define MIN_RECOM_FRACTION     0.1 
+#define MIN_RECOM_FRACTION     0.1
 #define MAX_RECOM_FRACTION     1.0 
 /* E recomp */
 
@@ -1446,6 +1446,8 @@ extern void freeBitVectors(unsigned int **v, int n);
 extern void freeHashTable(hashtable *h);
 extern stringHashtable *initStringHashTable(hashNumberType n);
 extern void addword(char *s, stringHashtable *h, int nodeNumber);
+
+extern void protectNode(recompVectors *rvec, int nodenum, int mxtips);
 
 extern void baseFrequenciesGTR(rawdata *rdta, cruncheddata *cdta, tree *tr);
 extern void printBothOpen(const char* format, ... );

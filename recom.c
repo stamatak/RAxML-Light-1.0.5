@@ -11,6 +11,22 @@
 #include "axml.h"
 
 
+void protectNode(recompVectors *rvec, int nodenum, int mxtips)	
+{
+  /* If a node is available we dont need to recompute it, but we neet to maker sure it is not unpinned while buildding the rest of the traversal descriptor,
+   * i.e. unpinnable must be false at this point, it will automatically be set to true, after the *counter post-order instructions have been executed */
+       	
+  int 
+    slot = rvec->iNode[nodenum - mxtips - 1];
+       
+  assert(slot != NODE_UNPINNED);
+ 		
+  assert(rvec->iVector[slot] == nodenum);
+     
+  if(rvec->unpinnable[slot])       	
+    rvec->unpinnable[slot] = FALSE;
+}
+
 
 static boolean isNodePinned(recompVectors *rvec, int nodenum, int mxtips)
 {
@@ -47,7 +63,7 @@ void allocRecompVectorsInfo(tree *tr)
 
   num_vectors = (int) (1 + tr->vectorRecomFraction * (float)num_inner_nodes); 
 
-  /*printBothOpen("num_vecs %d , min %d\n", num_vectors, (int)(log((double)tr->mxtips)) + 2);*/
+  /* printBothOpen("num_vecs %d , min %d\n", num_vectors, (int)(log((double)tr->mxtips)) + 2); */
 
   assert(num_vectors > (int)(log((double)tr->mxtips)) + 2);
   assert(num_vectors < tr->mxtips);
@@ -98,24 +114,24 @@ static int findUnpinnableSlotByCost(recompVectors *v, int mxtips)
     slot = v->iNode[i];
 
     if(slot != NODE_UNPINNED)
-    {
-      assert(slot >= 0 && slot < v->numVectors);
-
-      if(v->unpinnable[slot])
       {
-        assert(v->stlen[i] > 0);
-
-        if(v->stlen[i] < min_cost)
-        {
-          min_cost = v->stlen[i];
-          cheapest_slot = slot;
-          /* if the slot costs 2 you can break cause there is nothing cheaper to recompute */
-          if(min_cost == 2)
-            break;
-        }
+	assert(slot >= 0 && slot < v->numVectors);
+	
+	if(v->unpinnable[slot])
+	  {
+	    assert(v->stlen[i] > 0);
+	    
+	    if(v->stlen[i] < min_cost)
+	      {
+		min_cost = v->stlen[i];
+		cheapest_slot = slot;
+		/* if the slot costs 2 you can break cause there is nothing cheaper to recompute */
+		if(min_cost == 2)
+		  break;
+	      }
+	  }
       }
-    }
-  }
+  }  
 
   assert(min_cost < mxtips * 2 && min_cost >= 2);
   assert(cheapest_slot >= 0);

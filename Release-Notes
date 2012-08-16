@@ -8,3 +8,10 @@ in any data you make available or you intend to archive with the respective publ
 If you want to see what has been changed, have a look at the commit history under:
 
 https://github.com/stamatak/RAxML-Light-1.0.5/commits/master/
+
+Change history:
+
+v1.1.0
+
+-fixed a bug in the new memory saving technique (-r option) that in rare cases produced erroneous results.
+ 
