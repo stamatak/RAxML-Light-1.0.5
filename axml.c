@@ -313,20 +313,24 @@ static void setRateHetAndDataIncrement(tree *tr, analdef *adef)
 
 
   for(model = 0; model < tr->NumberOfModels; model++)
-  {
-    int 
-      states = -1,
-             maxTipStates = getUndetermined(tr->partitionData[model].dataType) + 1;
-
-    switch(tr->partitionData[model].dataType)
     {
-      case DNA_DATA:
-      case AA_DATA:	
-        states = getStates(tr->partitionData[model].dataType);	 
-        break;	
-      default:
-        assert(0);
-    }
+      int 
+	states = -1,
+	maxTipStates = getUndetermined(tr->partitionData[model].dataType) + 1;
+      
+      switch(tr->partitionData[model].dataType)
+	{
+	case DNA_DATA:
+	case AA_DATA:	
+	  states = getStates(tr->partitionData[model].dataType);	 
+	  break;	
+	case BINARY_DATA:
+	  states = getStates(tr->partitionData[model].dataType);	 
+	  assert(states == 2);
+	  break;      
+	default:
+	  assert(0);
+	}
 
     tr->partitionData[model].states       = states;
     tr->partitionData[model].maxTipStates = maxTipStates;

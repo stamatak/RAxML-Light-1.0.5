@@ -1197,6 +1197,222 @@ static void coreGTRCATPROT(double *EIGN, double lz, int numberOfCategories, doub
 }
 
 
+static void sumCAT_BINARY(int tipCase, double *sum, double *x1_start, double *x2_start, double *tipVector,
+			  unsigned char *tipX1, unsigned char *tipX2, int n)
+{
+  int i;
+  
+
+  double *x1, *x2;
+
+  switch(tipCase)
+    {
+    case TIP_TIP:
+      for (i = 0; i < n; i++)
+	{
+	  x1 = &(tipVector[2 * tipX1[i]]);
+	  x2 = &(tipVector[2 * tipX2[i]]);
+
+	  _mm_store_pd(&sum[i * 2], _mm_mul_pd( _mm_load_pd(x1), _mm_load_pd(x2)));
+	}
+      break;
+    case TIP_INNER:
+      for (i = 0; i < n; i++)
+	{
+	  x1 = &(tipVector[2 * tipX1[i]]);
+	  x2 = &x2_start[2 * i];
+
+	  _mm_store_pd(&sum[i * 2], _mm_mul_pd( _mm_load_pd(x1), _mm_load_pd(x2)));  
+	}
+      break;
+    case INNER_INNER:
+      for (i = 0; i < n; i++)
+	{
+	  x1 = &x1_start[2 * i];
+	  x2 = &x2_start[2 * i];
+
+	  _mm_store_pd(&sum[i * 2], _mm_mul_pd( _mm_load_pd(x1), _mm_load_pd(x2)));   
+	}
+      break;
+    default:
+      assert(0);
+    }
+}
+
+static void coreGTRCAT_BINARY(int upper, int numberOfCategories, double *sum,
+			      volatile double *d1, volatile double *d2, double *wrptr, double *wr2ptr,
+			      double *rptr, double *EIGN, int *cptr, double lz)
+{
+  int i;
+  double
+    *d, *d_start,
+    tmp_0, inv_Li, dlnLidlz, d2lnLidlz2,
+    dlnLdlz = 0.0,
+    d2lnLdlz2 = 0.0;
+  double e[2];
+  double dd1;
+
+  e[0] = EIGN[0];
+  e[1] = EIGN[0] * EIGN[0];
+
+
+  d = d_start = (double *)malloc(numberOfCategories * sizeof(double));
+
+  dd1 = e[0] * lz;
+
+  for(i = 0; i < numberOfCategories; i++)
+    d[i] = EXP(dd1 * rptr[i]);
+
+  for (i = 0; i < upper; i++)
+    {
+      d = &d_start[cptr[i]];
+
+      inv_Li = sum[2 * i];
+      inv_Li += (tmp_0 = d[0] * sum[2 * i + 1]);
+
+      inv_Li = 1.0/inv_Li;
+
+      dlnLidlz   = tmp_0 * e[0];
+      d2lnLidlz2 = tmp_0 * e[1];
+
+      dlnLidlz   *= inv_Li;
+      d2lnLidlz2 *= inv_Li;
+
+      dlnLdlz   += wrptr[i] * dlnLidlz;
+      d2lnLdlz2 += wr2ptr[i] * (d2lnLidlz2 - dlnLidlz * dlnLidlz);
+    }
+
+  *d1 = dlnLdlz;
+  *d2 = d2lnLdlz2;
+
+  free(d_start);
+}
+static void sumGAMMA_BINARY(int tipCase, double *sumtable, double *x1_start, double *x2_start, double *tipVector,
+			    unsigned char *tipX1, unsigned char *tipX2, int n)
+{
+  double *x1, *x2, *sum;
+  int i, j;
+
+  /* C-OPT once again switch over possible configurations at inner node */
+
+  switch(tipCase)
+    {
+    case TIP_TIP:
+      /* C-OPT main for loop overt alignment length */
+      for (i = 0; i < n; i++)
+	{
+	  x1 = &(tipVector[2 * tipX1[i]]);
+	  x2 = &(tipVector[2 * tipX2[i]]);
+	  sum = &sumtable[i * 8];
+
+	  for(j = 0; j < 4; j++)
+	    _mm_store_pd( &sum[j*2], _mm_mul_pd( _mm_load_pd( &x1[0] ), _mm_load_pd( &x2[0] )));	 
+	}
+      break;
+    case TIP_INNER:
+      for (i = 0; i < n; i++)
+	{
+	  x1  = &(tipVector[2 * tipX1[i]]);
+	  x2  = &x2_start[8 * i];
+	  sum = &sumtable[8 * i];
+
+	  for(j = 0; j < 4; j++)
+	    _mm_store_pd( &sum[j*2], _mm_mul_pd( _mm_load_pd( &x1[0] ), _mm_load_pd( &x2[j * 2] )));
+	}
+      break;
+    case INNER_INNER:
+      for (i = 0; i < n; i++)
+	{
+	  x1  = &x1_start[8 * i];
+	  x2  = &x2_start[8 * i];
+	  sum = &sumtable[8 * i];
+
+	  for(j = 0; j < 4; j++)
+	    _mm_store_pd( &sum[j*2], _mm_mul_pd( _mm_load_pd( &x1[j * 2] ), _mm_load_pd( &x2[j * 2] )));
+	}
+      break;
+    default:
+      assert(0);
+    }
+}
+static void coreGTRGAMMA_BINARY(const int upper, double *sumtable,
+				volatile double *d1,   volatile double *d2, double *EIGN, double *gammaRates, double lz, int *wrptr)
+{
+  double 
+    dlnLdlz = 0.0,
+    d2lnLdlz2 = 0.0,
+    ki, 
+    kisqr,  
+    inv_Li, 
+    dlnLidlz, 
+    d2lnLidlz2,  
+    *sum, 
+    diagptable0[8] __attribute__ ((aligned (16))),
+    diagptable1[8] __attribute__ ((aligned (16))),
+    diagptable2[8] __attribute__ ((aligned (16)));    
+    
+  int     
+    i, 
+    j;
+  
+  for(i = 0; i < 4; i++)
+    {
+      ki = gammaRates[i];
+      kisqr = ki * ki;
+      
+      diagptable0[i * 2] = 1.0;
+      diagptable1[i * 2] = 0.0;
+      diagptable2[i * 2] = 0.0;
+     
+      diagptable0[i * 2 + 1] = EXP(EIGN[0] * ki * lz);
+      diagptable1[i * 2 + 1] = EIGN[0] * ki;
+      diagptable2[i * 2 + 1] = EIGN[0] * EIGN[0] * kisqr;    
+    }
+
+  for (i = 0; i < upper; i++)
+    { 
+      __m128d a0 = _mm_setzero_pd();
+      __m128d a1 = _mm_setzero_pd();
+      __m128d a2 = _mm_setzero_pd();
+
+      sum = &sumtable[i * 8];         
+
+      for(j = 0; j < 4; j++)
+	{	 	  	
+	  double 	   
+	    *d0 = &diagptable0[j * 2],
+	    *d1 = &diagptable1[j * 2],
+	    *d2 = &diagptable2[j * 2];
+  	 	 	 
+	  __m128d tmpv = _mm_mul_pd(_mm_load_pd(d0), _mm_load_pd(&sum[j * 2]));
+	  a0 = _mm_add_pd(a0, tmpv);
+	  a1 = _mm_add_pd(a1, _mm_mul_pd(tmpv, _mm_load_pd(d1)));
+	  a2 = _mm_add_pd(a2, _mm_mul_pd(tmpv, _mm_load_pd(d2)));
+	    	 	  
+	}
+
+      a0 = _mm_hadd_pd(a0, a0);
+      a1 = _mm_hadd_pd(a1, a1);
+      a2 = _mm_hadd_pd(a2, a2);
+
+      _mm_storel_pd(&inv_Li, a0);     
+      _mm_storel_pd(&dlnLidlz, a1);
+      _mm_storel_pd(&d2lnLidlz2, a2); 
+
+      inv_Li = 1.0 / inv_Li;
+     
+      dlnLidlz   *= inv_Li;
+      d2lnLidlz2 *= inv_Li;     
+
+      dlnLdlz   += wrptr[i] * dlnLidlz;
+      d2lnLdlz2 += wrptr[i] * (d2lnLidlz2 - dlnLidlz * dlnLidlz);
+    }
+
+ 
+  *d1   = dlnLdlz;
+  *d2 = d2lnLdlz2; 
+}
+
 
 static void getVects(tree *tr, unsigned char **tipX1, unsigned char **tipX2, double **x1_start, double **x2_start, int *tipCase, int model,
     double **x1_gapColumn, double **x2_gapColumn, unsigned int **x1_gap, unsigned int **x2_gap)
@@ -1350,7 +1566,24 @@ void makenewzIterative(tree *tr)
 
       switch(tr->partitionData[model].dataType)
       {
-
+      case BINARY_DATA:
+	 if(tr->rateHetModel == CAT)
+          {
+            /*if(tr->saveMemory)
+	      assert(0);
+	      else*/
+	    sumCAT_BINARY(tipCase, tr->partitionData[model].sumBuffer, x1_start, x2_start, tr->partitionData[model].tipVector, tipX1, tipX2,
+			  width);
+          }
+          else
+          {
+            /*if(tr->saveMemory)
+	      assert(0);
+	      else*/
+	    sumGAMMA_BINARY(tipCase, tr->partitionData[model].sumBuffer, x1_start, x2_start, tr->partitionData[model].tipVector, tipX1, tipX2,
+			    width);
+          }
+	 break;
         case DNA_DATA:
           if(tr->rateHetModel == CAT)
           {
@@ -1458,7 +1691,16 @@ void execCore(tree *tr, volatile double *_dlnLdlz, volatile double *_d2lnLdlz2)
 
       switch(tr->partitionData[model].dataType)
       {
-
+      case BINARY_DATA:
+	 if(tr->rateHetModel == CAT)
+	    coreGTRCAT_BINARY(width, tr->partitionData[model].numberOfCategories, sumBuffer,
+				    &dlnLdlz, &d2lnLdlz2, tr->partitionData[model].wr, tr->partitionData[model].wr2,
+				    tr->partitionData[model].perSiteRates, tr->partitionData[model].EIGN,  tr->partitionData[model].rateCategory, lz);
+	 else
+	   coreGTRGAMMA_BINARY(width, sumBuffer,
+				      &dlnLdlz, &d2lnLdlz2, tr->partitionData[model].EIGN, tr->partitionData[model].gammaRates, lz,
+				      tr->partitionData[model].wgt);
+	 break;
         case DNA_DATA:
           if(tr->rateHetModel == CAT)
             coreGTRCAT(width, tr->partitionData[model].numberOfCategories, sumBuffer,

@@ -94,7 +94,7 @@
 
 #define badRear         -1
 
-#define NUM_BRANCHES     5
+#define NUM_BRANCHES     2
 
 
 #define TRUE             1
@@ -185,7 +185,7 @@ extern double exp_approx (double x);
 #define PointGamma(prob,alpha,beta)  PointChi2(prob,2.0*(alpha))/(2.0*(beta))
 
 #define programName        "RAxML-Light"
-#define programVersion     "1.1.0"
+#define programVersion     "1.1.1"
 #define programDate        "August 2012"
 
 

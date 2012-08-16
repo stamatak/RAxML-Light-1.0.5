@@ -11,6 +11,10 @@ https://github.com/stamatak/RAxML-Light-1.0.5/commits/master/
 
 Change history:
 
+v1.1.1
+
+-implemented models for handling binary data partitions 
+
 v1.1.0
 
 -fixed a bug in the new memory saving technique (-r option) that in rare cases produced erroneous results.

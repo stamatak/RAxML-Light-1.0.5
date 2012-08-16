@@ -68,7 +68,19 @@ void calcDiagptable(double z, int data, int numberOfCategories, double *rptr, do
     lz = log(z);
 
   switch(data)
-  {    
+    {     
+    case BINARY_DATA:
+      {
+	double lz1;
+	
+	lz1 = EIGN[0] * lz;
+	for(i = 0; i <  numberOfCategories; i++)
+	  {		 
+	    diagptable[2 * i] = 1.0;
+	    diagptable[2 * i + 1] = EXP(rptr[i] * lz1);	   	    
+	  }
+      }
+      break;
     case DNA_DATA:
       {
         double lz1, lz2, lz3;
@@ -1032,7 +1044,140 @@ static double evaluateGTRCAT (int *ex1, int *ex2, int *cptr, int *wptr,
   return  sum;         
 } 
 
+static double evaluateGTRCAT_BINARY (int *ex1, int *ex2, int *cptr, int *wptr,
+				     double *x1_start, double *x2_start, double *tipVector, 		      
+				     unsigned char *tipX1, int n, double *diagptable_start)
+{
+  double  
+    sum = 0.0, 
+    term, 
+    *diagptable, 
+    *x1, 
+    *x2; 
+  
+  int     
+    i;
+ 
+  if(tipX1)
+    {          
+      for (i = 0; i < n; i++) 
+	{
+	  double 
+	    t[2] __attribute__ ((aligned (16)));	    		   	  
 
+	  x1 = &(tipVector[2 * tipX1[i]]);
+	  x2 = &(x2_start[2 * i]);
+	  
+	  diagptable = &(diagptable_start[2 * cptr[i]]);	    	    	  
+	
+	  _mm_store_pd(t, _mm_mul_pd(_mm_load_pd(x1), _mm_mul_pd(_mm_load_pd(x2), _mm_load_pd(diagptable))));
+	  	  
+	  term = LOG(t[0] + t[1]);     
+
+	  sum += wptr[i] * term;
+	}	
+    }               
+  else
+    {
+      for (i = 0; i < n; i++) 
+	{	
+	  double 
+	    t[2] __attribute__ ((aligned (16)));	    		   	  
+	          	
+	  x1 = &x1_start[2 * i];
+	  x2 = &x2_start[2 * i];
+	  
+	  diagptable = &diagptable_start[2 * cptr[i]];		  
+	  
+	  _mm_store_pd(t, _mm_mul_pd(_mm_load_pd(x1), _mm_mul_pd(_mm_load_pd(x2), _mm_load_pd(diagptable))));
+	  	  
+	  term = LOG(t[0] + t[1]);	 	     
+	  
+	  sum += wptr[i] * term;
+	}	   
+    }
+       
+  return  sum;         
+} 
+
+static double evaluateGTRGAMMA_BINARY(int *ex1, int *ex2, int *wptr,
+				      double *x1_start, double *x2_start, 
+				      double *tipVector, 
+				      unsigned char *tipX1, const int n, double *diagptable)
+{
+  double   sum = 0.0, term;    
+  int     i, j;
+
+  double  *x1, *x2;             
+
+  if(tipX1)
+    {          
+      for (i = 0; i < n; i++)
+	{
+
+	  double t[2] __attribute__ ((aligned (16)));
+	  __m128d termv, x1v, x2v, dv;
+
+	  x1 = &(tipVector[2 * tipX1[i]]);	 
+	  x2 = &x2_start[8 * i];	          	  	
+	
+	  termv = _mm_set1_pd(0.0);	    	   
+	  
+	  for(j = 0; j < 4; j++)
+	    {
+	      x1v = _mm_load_pd(&x1[0]);
+	      x2v = _mm_load_pd(&x2[j * 2]);
+	      dv   = _mm_load_pd(&diagptable[j * 2]);
+	      
+	      x1v = _mm_mul_pd(x1v, x2v);
+	      x1v = _mm_mul_pd(x1v, dv);
+	      
+	      termv = _mm_add_pd(termv, x1v);	      	      
+	    }
+	  
+	  _mm_store_pd(t, termv);	        
+	  	 
+	  term = LOG(0.25 * (t[0] + t[1]));	  
+
+	  
+	  sum += wptr[i] * term;
+	}	  
+    }
+  else
+    {         
+      for (i = 0; i < n; i++) 
+	{
+
+	  double t[2] __attribute__ ((aligned (16)));
+	  __m128d termv, x1v, x2v, dv;
+      	  	 	  	  
+	  x1 = &x1_start[8 * i];
+	  x2 = &x2_start[8 * i];
+	  	  	
+	  termv = _mm_set1_pd(0.0);	    	   
+	  
+	  for(j = 0; j < 4; j++)
+	    {
+	      x1v = _mm_load_pd(&x1[j * 2]);
+	      x2v = _mm_load_pd(&x2[j * 2]);
+	      dv   = _mm_load_pd(&diagptable[j * 2]);
+	      
+	      x1v = _mm_mul_pd(x1v, x2v);
+	      x1v = _mm_mul_pd(x1v, dv);
+	      
+	      termv = _mm_add_pd(termv, x1v);	      	      
+	    }
+	  
+	  _mm_store_pd(t, termv);	  	  
+	 
+	  term = LOG(0.25 * (t[0] + t[1]));	 	  
+
+	  sum += wptr[i] * term;
+	}                      	
+    }
+
+  return sum;
+} 
 
 
 double evaluateIterative(tree *tr,  boolean writeVector)
@@ -1172,7 +1317,31 @@ double evaluateIterative(tree *tr,  boolean writeVector)
 
 
       switch(tr->partitionData[model].dataType)
-      { 	  
+      { 
+      case BINARY_DATA:
+	if(tr->rateHetModel == CAT)
+          {
+            calcDiagptable(z, BINARY_DATA, tr->partitionData[model].numberOfCategories, tr->partitionData[model].perSiteRates, tr->partitionData[model].EIGN, diagptable);
+
+	    /*f(tr->saveMemory)
+	      assert(0);
+	      else*/
+	    partitionLikelihood =  evaluateGTRCAT_BINARY(ex1, ex2, tr->partitionData[model].rateCategory, tr->partitionData[model].wgt,
+							 x1_start, x2_start, tr->partitionData[model].tipVector, 
+							 tip, width, diagptable);
+	  }
+	else
+	  {
+	    calcDiagptable(z, BINARY_DATA, 4, tr->partitionData[model].gammaRates, tr->partitionData[model].EIGN, diagptable);
+
+            /*(tr->saveMemory)
+	      assert(0);
+	      else*/
+	    partitionLikelihood = evaluateGTRGAMMA_BINARY(ex1, ex2, tr->partitionData[model].wgt,
+							  x1_start, x2_start, tr->partitionData[model].tipVector,
+							  tip, width, diagptable); 
+	  }
+	break;
         case DNA_DATA:
           if(tr->rateHetModel == CAT)
           {
