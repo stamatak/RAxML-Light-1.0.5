@@ -63,9 +63,9 @@ void allocRecompVectorsInfo(tree *tr)
 
   num_vectors = (int) (1 + tr->vectorRecomFraction * (float)num_inner_nodes); 
 
-  /* printBothOpen("num_vecs %d , min %d\n", num_vectors, (int)(log((double)tr->mxtips)) + 2); */
+  /* printBothOpen("num_vecs %d , min %d\n", num_vectors, (int)(log((double)tr->mxtips)) / log(2.0)) + 3); */
 
-  assert(num_vectors > (int)(log((double)tr->mxtips)) + 2);
+  assert(num_vectors > 3 + (int)(log((double)tr->mxtips) / log(2.0)));
   assert(num_vectors < tr->mxtips);
 
 
